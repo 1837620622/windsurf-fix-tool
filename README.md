@@ -40,7 +40,7 @@
 ### macOS
 
 ```bash
-git clone https://github.com/chuankangkk/windsurf-fix-tool.git
+git clone https://github.com/1837620622/windsurf-fix-tool.git
 cd windsurf-fix-tool
 chmod +x fix-windsurf-mac.sh
 ./fix-windsurf-mac.sh
@@ -49,7 +49,7 @@ chmod +x fix-windsurf-mac.sh
 ### Linux
 
 ```bash
-git clone https://github.com/chuankangkk/windsurf-fix-tool.git
+git clone https://github.com/1837620622/windsurf-fix-tool.git
 cd windsurf-fix-tool
 chmod +x fix-windsurf-linux.sh
 ./fix-windsurf-linux.sh
@@ -58,7 +58,7 @@ chmod +x fix-windsurf-linux.sh
 ### Windows
 
 ```powershell
-git clone https://github.com/chuankangkk/windsurf-fix-tool.git
+git clone https://github.com/1837620622/windsurf-fix-tool.git
 cd windsurf-fix-tool
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\fix-windsurf-win.ps1
