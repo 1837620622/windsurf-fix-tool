@@ -26,6 +26,9 @@
 | 💬 **Cascade Cache Cleanup** | Fix startup failures (last resort) | ⚠️ Yes |
 | 🖥️ **Terminal Fixes** | Resolve shell connection and stuck sessions | ❌ No |
 | 📊 **Diagnostic Reports** | Generate system info for troubleshooting | ❌ No |
+| 🧹 **Dev Tool Cache Cleanup** | Clean npm/pip/Homebrew/Maven/Gradle caches | ❌ No |
+| 🗑️ **System Cache Cleanup** | Clean logs/trash/old backups/DNS cache | ❌ No |
+| 📈 **Disk Usage Analysis** | Analyze disk usage, locate large files and caches | ❌ No |
 
 ## 🖥️ Supported Platforms
 
@@ -116,6 +119,22 @@ xattr -c "/Applications/Windsurf.app/"
 sudo chown root:root /path/to/windsurf/chrome-sandbox
 sudo chmod 4755 /path/to/windsurf/chrome-sandbox
 ```
+
+### 7. Dev Tool Cache Cleanup
+
+Supports cleaning caches for: npm, pip, Homebrew, apt/yum/dnf, uv, Maven, Gradle, Yarn, pnpm, Selenium/WebDriver, Go modules, Cargo/Rust, conda, CocoaPods, Xcode DerivedData, Docker.
+
+Run the tool and select "Clean Dev Tool Caches" - supports batch cleanup or item-by-item selection.
+
+### 8. System Cache & Junk Cleanup
+
+**macOS:** User caches (`~/Library/Caches`), old logs (30+ days), Trash, old Windsurf backups, old diagnostic reports, DNS cache flush.
+
+**Linux:** User caches (`~/.cache`), system logs (`/var/log` 30+ days), temp files (`/tmp` 7+ days), systemd journal logs, old Windsurf backups, DNS cache flush.
+
+### 9. Disk Usage Analysis
+
+Analyze disk space usage including directory sizes, hidden folder rankings, Library subdirectory rankings (macOS), and app container usage (macOS).
 
 ## 🌐 Network Whitelist
 

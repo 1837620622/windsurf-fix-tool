@@ -620,47 +620,637 @@ EOF
 }
 
 # ----------------------------------------------------------------------------
+# 功能12: 清理开发工具缓存（npm/pip/Homebrew/Maven等）
+# ----------------------------------------------------------------------------
+clean_dev_caches() {
+    print_info "扫描开发工具缓存..."
+    
+    echo ""
+    echo -e "${CYAN}正在检测各类开发工具缓存大小...${NC}"
+    echo ""
+    
+    TOTAL_SIZE=0
+    CLEANABLE_ITEMS=()
+    
+    # npm 缓存
+    NPM_CACHE="$HOME/.npm"
+    if [ -d "$NPM_CACHE" ]; then
+        SIZE=$(du -sm "$NPM_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[npm 缓存]${NC} ~/.npm - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("npm")
+    fi
+    
+    # pip 缓存
+    PIP_CACHE="$HOME/Library/Caches/pip"
+    if [ -d "$PIP_CACHE" ]; then
+        SIZE=$(du -sm "$PIP_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[pip 缓存]${NC} ~/Library/Caches/pip - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("pip")
+    fi
+    
+    # Homebrew 缓存
+    BREW_CACHE="$HOME/Library/Caches/Homebrew"
+    if [ -d "$BREW_CACHE" ]; then
+        SIZE=$(du -sm "$BREW_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Homebrew 缓存]${NC} ~/Library/Caches/Homebrew - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("brew")
+    fi
+    
+    # uv 缓存（Python包管理器）
+    UV_CACHE="$HOME/.cache/uv"
+    if [ -d "$UV_CACHE" ]; then
+        SIZE=$(du -sm "$UV_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[uv 缓存]${NC} ~/.cache/uv - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("uv")
+    fi
+    
+    # Maven 缓存
+    MAVEN_CACHE="$HOME/.m2/repository"
+    if [ -d "$MAVEN_CACHE" ]; then
+        SIZE=$(du -sm "$MAVEN_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Maven 缓存]${NC} ~/.m2/repository - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("maven")
+    fi
+    
+    # Gradle 缓存
+    GRADLE_CACHE="$HOME/.gradle/caches"
+    if [ -d "$GRADLE_CACHE" ]; then
+        SIZE=$(du -sm "$GRADLE_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Gradle 缓存]${NC} ~/.gradle/caches - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("gradle")
+    fi
+    
+    # Yarn 缓存
+    YARN_CACHE="$HOME/Library/Caches/Yarn"
+    if [ -d "$YARN_CACHE" ]; then
+        SIZE=$(du -sm "$YARN_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Yarn 缓存]${NC} ~/Library/Caches/Yarn - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("yarn")
+    fi
+    
+    # pnpm 缓存
+    PNPM_CACHE="$HOME/Library/pnpm"
+    PNPM_STORE="$HOME/.pnpm-store"
+    PNPM_SIZE=0
+    if [ -d "$PNPM_CACHE" ]; then
+        SIZE=$(du -sm "$PNPM_CACHE" 2>/dev/null | awk '{print $1}')
+        PNPM_SIZE=$((PNPM_SIZE + SIZE))
+    fi
+    if [ -d "$PNPM_STORE" ]; then
+        SIZE=$(du -sm "$PNPM_STORE" 2>/dev/null | awk '{print $1}')
+        PNPM_SIZE=$((PNPM_SIZE + SIZE))
+    fi
+    if [ $PNPM_SIZE -gt 0 ]; then
+        echo -e "  ${GREEN}[pnpm 缓存]${NC} ~/Library/pnpm + ~/.pnpm-store - ${YELLOW}${PNPM_SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + PNPM_SIZE))
+        CLEANABLE_ITEMS+=("pnpm")
+    fi
+    
+    # Selenium/WebDriver 缓存
+    SELENIUM_CACHE="$HOME/.cache/selenium"
+    WDM_CACHE="$HOME/.wdm"
+    SELENIUM_SIZE=0
+    if [ -d "$SELENIUM_CACHE" ]; then
+        SIZE=$(du -sm "$SELENIUM_CACHE" 2>/dev/null | awk '{print $1}')
+        SELENIUM_SIZE=$((SELENIUM_SIZE + SIZE))
+    fi
+    if [ -d "$WDM_CACHE" ]; then
+        SIZE=$(du -sm "$WDM_CACHE" 2>/dev/null | awk '{print $1}')
+        SELENIUM_SIZE=$((SELENIUM_SIZE + SIZE))
+    fi
+    if [ $SELENIUM_SIZE -gt 0 ]; then
+        echo -e "  ${GREEN}[Selenium/WebDriver]${NC} ~/.cache/selenium + ~/.wdm - ${YELLOW}${SELENIUM_SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SELENIUM_SIZE))
+        CLEANABLE_ITEMS+=("selenium")
+    fi
+    
+    # undetected_chromedriver 缓存
+    UC_CACHE="$HOME/Library/Application Support/undetected_chromedriver"
+    if [ -d "$UC_CACHE" ]; then
+        SIZE=$(du -sm "$UC_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[undetected_chromedriver]${NC} - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("uc")
+    fi
+    
+    # Go 缓存
+    GO_CACHE="$HOME/go/pkg/mod/cache"
+    if [ -d "$GO_CACHE" ]; then
+        SIZE=$(du -sm "$GO_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Go 模块缓存]${NC} ~/go/pkg/mod/cache - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("go")
+    fi
+    
+    # Cargo/Rust 缓存
+    CARGO_CACHE="$HOME/.cargo/registry"
+    if [ -d "$CARGO_CACHE" ]; then
+        SIZE=$(du -sm "$CARGO_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Cargo 缓存]${NC} ~/.cargo/registry - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("cargo")
+    fi
+    
+    # conda 缓存
+    for CONDA_DIR in "$HOME/miniconda3/pkgs" "$HOME/anaconda3/pkgs" "$HOME/opt/anaconda3/pkgs"; do
+        if [ -d "$CONDA_DIR" ]; then
+            SIZE=$(du -sm "$CONDA_DIR" 2>/dev/null | awk '{print $1}')
+            echo -e "  ${GREEN}[conda 包缓存]${NC} $CONDA_DIR - ${YELLOW}${SIZE}MB${NC}"
+            TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+            CLEANABLE_ITEMS+=("conda")
+            break
+        fi
+    done
+    
+    # CocoaPods 缓存
+    COCOAPODS_CACHE="$HOME/Library/Caches/CocoaPods"
+    if [ -d "$COCOAPODS_CACHE" ]; then
+        SIZE=$(du -sm "$COCOAPODS_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[CocoaPods 缓存]${NC} ~/Library/Caches/CocoaPods - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("cocoapods")
+    fi
+    
+    # Xcode DerivedData
+    XCODE_DERIVED="$HOME/Library/Developer/Xcode/DerivedData"
+    if [ -d "$XCODE_DERIVED" ]; then
+        SIZE=$(du -sm "$XCODE_DERIVED" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Xcode DerivedData]${NC} - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("xcode")
+    fi
+    
+    # Google Chrome 缓存
+    CHROME_CACHE="$HOME/Library/Caches/Google"
+    if [ -d "$CHROME_CACHE" ]; then
+        SIZE=$(du -sm "$CHROME_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[Google Chrome 缓存]${NC} ~/Library/Caches/Google - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        CLEANABLE_ITEMS+=("chrome")
+    fi
+    
+    echo ""
+    echo -e "  ${CYAN}可清理总计: ${YELLOW}${TOTAL_SIZE}MB${NC}"
+    echo ""
+    
+    if [ ${#CLEANABLE_ITEMS[@]} -eq 0 ]; then
+        print_info "未检测到可清理的开发工具缓存"
+        return 0
+    fi
+    
+    echo -e "${YELLOW}请选择清理方式:${NC}"
+    echo "  1) 全部清理（推荐安全项）"
+    echo "  2) 逐项选择清理"
+    echo "  3) 取消"
+    echo ""
+    read -p "$(echo -e ${CYAN}请选择 [1-3]: ${NC})" clean_choice
+    
+    case "$clean_choice" in
+        1)
+            # 全部清理安全项
+            for item in "${CLEANABLE_ITEMS[@]}"; do
+                case "$item" in
+                    npm)
+                        if command -v npm &> /dev/null; then
+                            npm cache clean --force 2>/dev/null
+                        else
+                            rm -rf "$NPM_CACHE/_cacache" 2>/dev/null
+                        fi
+                        print_success "npm 缓存已清理"
+                        ;;
+                    pip)
+                        if command -v pip3 &> /dev/null; then
+                            pip3 cache purge 2>/dev/null
+                        else
+                            rm -rf "$PIP_CACHE" 2>/dev/null
+                        fi
+                        print_success "pip 缓存已清理"
+                        ;;
+                    brew)
+                        if command -v brew &> /dev/null; then
+                            brew cleanup -s 2>/dev/null
+                            brew autoremove 2>/dev/null
+                        fi
+                        print_success "Homebrew 缓存已清理"
+                        ;;
+                    uv)
+                        rm -rf "$UV_CACHE" 2>/dev/null
+                        print_success "uv 缓存已清理"
+                        ;;
+                    maven)
+                        print_warning "Maven 缓存跳过（删除后需重新下载依赖，建议手动清理）"
+                        ;;
+                    gradle)
+                        print_warning "Gradle 缓存跳过（删除后需重新下载依赖，建议手动清理）"
+                        ;;
+                    yarn)
+                        if command -v yarn &> /dev/null; then
+                            yarn cache clean 2>/dev/null
+                        else
+                            rm -rf "$YARN_CACHE" 2>/dev/null
+                        fi
+                        print_success "Yarn 缓存已清理"
+                        ;;
+                    pnpm)
+                        if command -v pnpm &> /dev/null; then
+                            pnpm store prune 2>/dev/null
+                        fi
+                        print_success "pnpm 缓存已清理"
+                        ;;
+                    selenium)
+                        rm -rf "$SELENIUM_CACHE" 2>/dev/null
+                        rm -rf "$WDM_CACHE" 2>/dev/null
+                        print_success "Selenium/WebDriver 缓存已清理"
+                        ;;
+                    uc)
+                        rm -rf "$UC_CACHE" 2>/dev/null
+                        print_success "undetected_chromedriver 缓存已清理"
+                        ;;
+                    go)
+                        if command -v go &> /dev/null; then
+                            go clean -modcache 2>/dev/null
+                        fi
+                        print_success "Go 模块缓存已清理"
+                        ;;
+                    cargo)
+                        print_warning "Cargo 缓存跳过（建议使用 cargo-cache 工具清理）"
+                        ;;
+                    conda)
+                        if command -v conda &> /dev/null; then
+                            conda clean --all -y 2>/dev/null
+                        fi
+                        print_success "conda 缓存已清理"
+                        ;;
+                    cocoapods)
+                        rm -rf "$COCOAPODS_CACHE" 2>/dev/null
+                        print_success "CocoaPods 缓存已清理"
+                        ;;
+                    xcode)
+                        rm -rf "$XCODE_DERIVED" 2>/dev/null
+                        print_success "Xcode DerivedData 已清理"
+                        ;;
+                    chrome)
+                        rm -rf "$CHROME_CACHE" 2>/dev/null
+                        print_success "Google Chrome 缓存已清理"
+                        ;;
+                esac
+            done
+            echo ""
+            print_success "开发工具缓存清理完成！"
+            ;;
+        2)
+            # 逐项选择
+            for item in "${CLEANABLE_ITEMS[@]}"; do
+                case "$item" in
+                    npm) label="npm 缓存" ;;
+                    pip) label="pip 缓存" ;;
+                    brew) label="Homebrew 缓存" ;;
+                    uv) label="uv 缓存" ;;
+                    maven) label="Maven 缓存" ;;
+                    gradle) label="Gradle 缓存" ;;
+                    yarn) label="Yarn 缓存" ;;
+                    pnpm) label="pnpm 缓存" ;;
+                    selenium) label="Selenium/WebDriver 缓存" ;;
+                    uc) label="undetected_chromedriver 缓存" ;;
+                    go) label="Go 模块缓存" ;;
+                    cargo) label="Cargo 缓存" ;;
+                    conda) label="conda 包缓存" ;;
+                    cocoapods) label="CocoaPods 缓存" ;;
+                    xcode) label="Xcode DerivedData" ;;
+                    chrome) label="Google Chrome 缓存" ;;
+                    *) label="$item" ;;
+                esac
+                
+                read -p "$(echo -e ${YELLOW}清理 $label？[y/N]: ${NC})" yn
+                if [ "$yn" = "y" ] || [ "$yn" = "Y" ]; then
+                    case "$item" in
+                        npm)
+                            if command -v npm &> /dev/null; then npm cache clean --force 2>/dev/null
+                            else rm -rf "$NPM_CACHE/_cacache" 2>/dev/null; fi
+                            ;;
+                        pip)
+                            if command -v pip3 &> /dev/null; then pip3 cache purge 2>/dev/null
+                            else rm -rf "$PIP_CACHE" 2>/dev/null; fi
+                            ;;
+                        brew)
+                            if command -v brew &> /dev/null; then brew cleanup -s 2>/dev/null; brew autoremove 2>/dev/null; fi
+                            ;;
+                        uv) rm -rf "$UV_CACHE" 2>/dev/null ;;
+                        maven) rm -rf "$MAVEN_CACHE" 2>/dev/null ;;
+                        gradle) rm -rf "$GRADLE_CACHE" 2>/dev/null ;;
+                        yarn)
+                            if command -v yarn &> /dev/null; then yarn cache clean 2>/dev/null
+                            else rm -rf "$YARN_CACHE" 2>/dev/null; fi
+                            ;;
+                        pnpm)
+                            if command -v pnpm &> /dev/null; then pnpm store prune 2>/dev/null; fi
+                            ;;
+                        selenium) rm -rf "$SELENIUM_CACHE" "$WDM_CACHE" 2>/dev/null ;;
+                        uc) rm -rf "$UC_CACHE" 2>/dev/null ;;
+                        go)
+                            if command -v go &> /dev/null; then go clean -modcache 2>/dev/null; fi
+                            ;;
+                        cargo) rm -rf "$CARGO_CACHE" 2>/dev/null ;;
+                        conda)
+                            if command -v conda &> /dev/null; then conda clean --all -y 2>/dev/null; fi
+                            ;;
+                        cocoapods) rm -rf "$COCOAPODS_CACHE" 2>/dev/null ;;
+                        xcode) rm -rf "$XCODE_DERIVED" 2>/dev/null ;;
+                        chrome) rm -rf "$CHROME_CACHE" 2>/dev/null ;;
+                    esac
+                    print_success "$label 已清理"
+                fi
+            done
+            ;;
+        *)
+            print_info "已取消操作"
+            ;;
+    esac
+}
+
+# ----------------------------------------------------------------------------
+# 功能13: 清理macOS系统缓存
+# ----------------------------------------------------------------------------
+clean_system_caches() {
+    print_info "扫描 macOS 系统缓存..."
+    
+    echo ""
+    echo -e "${CYAN}正在检测系统级缓存...${NC}"
+    echo ""
+    
+    TOTAL_SIZE=0
+    
+    # ~/Library/Caches 各应用缓存
+    USER_CACHE="$HOME/Library/Caches"
+    if [ -d "$USER_CACHE" ]; then
+        SIZE=$(du -sm "$USER_CACHE" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[用户缓存]${NC} ~/Library/Caches - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+        
+        # 列出 Top 10 大缓存目录
+        echo -e "    ${CYAN}Top 10 缓存目录:${NC}"
+        du -sm "$USER_CACHE"/*/ 2>/dev/null | sort -rn | head -10 | while read size dir; do
+            dirname=$(basename "$dir")
+            echo -e "      $dirname - ${YELLOW}${size}MB${NC}"
+        done
+        echo ""
+    fi
+    
+    # ~/Library/Logs 日志文件
+    USER_LOGS="$HOME/Library/Logs"
+    if [ -d "$USER_LOGS" ]; then
+        SIZE=$(du -sm "$USER_LOGS" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[用户日志]${NC} ~/Library/Logs - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+    fi
+    
+    # 废纸篓
+    TRASH="$HOME/.Trash"
+    if [ -d "$TRASH" ] && [ "$(ls -A "$TRASH" 2>/dev/null)" ]; then
+        SIZE=$(du -sm "$TRASH" 2>/dev/null | awk '{print $1}')
+        echo -e "  ${GREEN}[废纸篓]${NC} ~/.Trash - ${YELLOW}${SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + SIZE))
+    fi
+    
+    # Windsurf 旧备份目录
+    BACKUP_COUNT=0
+    BACKUP_SIZE=0
+    for bdir in "$HOME"/.windsurf-backup-*; do
+        if [ -d "$bdir" ]; then
+            BACKUP_COUNT=$((BACKUP_COUNT + 1))
+            SIZE=$(du -sm "$bdir" 2>/dev/null | awk '{print $1}')
+            BACKUP_SIZE=$((BACKUP_SIZE + SIZE))
+        fi
+    done
+    if [ $BACKUP_COUNT -gt 0 ]; then
+        echo -e "  ${GREEN}[Windsurf 旧备份]${NC} ${BACKUP_COUNT}个备份目录 - ${YELLOW}${BACKUP_SIZE}MB${NC}"
+        TOTAL_SIZE=$((TOTAL_SIZE + BACKUP_SIZE))
+    fi
+    
+    # 旧诊断报告
+    DIAG_COUNT=$(ls "$HOME"/windsurf-diagnostic-*.txt 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$DIAG_COUNT" -gt 0 ] 2>/dev/null; then
+        echo -e "  ${GREEN}[旧诊断报告]${NC} ${DIAG_COUNT}个文件"
+    fi
+    
+    # DNS 缓存
+    echo -e "  ${GREEN}[DNS 缓存]${NC} 系统DNS缓存（可刷新）"
+    
+    echo ""
+    echo -e "  ${CYAN}系统缓存总计: ${YELLOW}${TOTAL_SIZE}MB${NC}"
+    echo ""
+    
+    echo -e "${YELLOW}请选择清理项目:${NC}"
+    echo "  1) 清理用户缓存（~/Library/Caches，排除系统关键缓存）"
+    echo "  2) 清理旧日志文件（超过30天）"
+    echo "  3) 清空废纸篓"
+    echo "  4) 清理 Windsurf 旧备份目录"
+    echo "  5) 清理旧诊断报告"
+    echo "  6) 刷新 DNS 缓存"
+    echo "  7) 全部执行（安全项）"
+    echo "  0) 取消"
+    echo ""
+    read -p "$(echo -e ${CYAN}请选择 [0-7]: ${NC})" sys_choice
+    
+    case "$sys_choice" in
+        1)
+            print_warning "将清理用户缓存目录（排除 Homebrew 等重要缓存）"
+            if confirm_action; then
+                # 清理用户缓存，但排除一些重要的
+                find "$USER_CACHE" -mindepth 1 -maxdepth 1 -type d \
+                    ! -name "Homebrew" \
+                    ! -name "com.apple.Safari" \
+                    ! -name "CloudKit" \
+                    -exec rm -rf {} + 2>/dev/null
+                print_success "用户缓存已清理"
+            fi
+            ;;
+        2)
+            find "$USER_LOGS" -type f -mtime +30 -delete 2>/dev/null
+            print_success "超过30天的旧日志已清理"
+            ;;
+        3)
+            if confirm_action; then
+                rm -rf "$TRASH"/* 2>/dev/null
+                print_success "废纸篓已清空"
+            fi
+            ;;
+        4)
+            if [ $BACKUP_COUNT -gt 0 ]; then
+                print_info "将删除 ${BACKUP_COUNT} 个 Windsurf 旧备份目录"
+                if confirm_action; then
+                    rm -rf "$HOME"/.windsurf-backup-* 2>/dev/null
+                    print_success "Windsurf 旧备份已清理"
+                fi
+            else
+                print_info "没有旧备份需要清理"
+            fi
+            ;;
+        5)
+            rm -f "$HOME"/windsurf-diagnostic-*.txt 2>/dev/null
+            print_success "旧诊断报告已清理"
+            ;;
+        6)
+            sudo dscacheutil -flushcache 2>/dev/null
+            sudo killall -HUP mDNSResponder 2>/dev/null
+            print_success "DNS 缓存已刷新"
+            ;;
+        7)
+            print_info "执行全部安全清理项..."
+            
+            # 清理旧日志
+            find "$USER_LOGS" -type f -mtime +30 -delete 2>/dev/null
+            print_success "旧日志已清理"
+            
+            # 清理废纸篓
+            rm -rf "$TRASH"/* 2>/dev/null
+            print_success "废纸篓已清空"
+            
+            # 清理旧备份
+            if [ $BACKUP_COUNT -gt 0 ]; then
+                rm -rf "$HOME"/.windsurf-backup-* 2>/dev/null
+                print_success "Windsurf 旧备份已清理"
+            fi
+            
+            # 清理旧诊断报告
+            rm -f "$HOME"/windsurf-diagnostic-*.txt 2>/dev/null
+            print_success "旧诊断报告已清理"
+            
+            # 刷新DNS
+            sudo dscacheutil -flushcache 2>/dev/null
+            sudo killall -HUP mDNSResponder 2>/dev/null
+            print_success "DNS 缓存已刷新"
+            
+            echo ""
+            print_success "系统缓存清理完成！"
+            ;;
+        *)
+            print_info "已取消操作"
+            ;;
+    esac
+}
+
+# ----------------------------------------------------------------------------
+# 功能14: 磁盘空间分析
+# ----------------------------------------------------------------------------
+analyze_disk_usage() {
+    print_info "分析磁盘空间使用情况..."
+    
+    echo ""
+    echo -e "${CYAN}========== 磁盘空间概览 ==========${NC}"
+    echo ""
+    
+    # 磁盘总体使用
+    df -h / | awk 'NR==2{printf "  磁盘总容量: %s | 已使用: %s | 可用: %s | 使用率: %s\n", $2, $3, $4, $5}'
+    echo ""
+    
+    # 用户主目录
+    HOME_SIZE=$(du -sh "$HOME" 2>/dev/null | awk '{print $1}')
+    echo -e "  ${CYAN}用户主目录:${NC} ${YELLOW}$HOME_SIZE${NC}"
+    echo ""
+    
+    # 主要目录大小
+    echo -e "  ${CYAN}主要目录占用:${NC}"
+    echo ""
+    
+    for dir in "Library" "Downloads" "Documents" "Desktop" "Movies" "Music" "Pictures"; do
+        if [ -d "$HOME/$dir" ]; then
+            SIZE=$(du -sh "$HOME/$dir" 2>/dev/null | awk '{print $1}')
+            printf "    %-15s %s\n" "$dir" "$SIZE"
+        fi
+    done
+    echo ""
+    
+    # 隐藏目录 Top 10
+    echo -e "  ${CYAN}隐藏目录 Top 10:${NC}"
+    echo ""
+    du -sm "$HOME"/.[!.]* 2>/dev/null | sort -rn | head -10 | while read size dir; do
+        dirname=$(basename "$dir")
+        printf "    %-30s %sMB\n" "$dirname" "$size"
+    done
+    echo ""
+    
+    # ~/Library 子目录 Top 10
+    echo -e "  ${CYAN}~/Library 子目录 Top 10:${NC}"
+    echo ""
+    du -sm "$HOME"/Library/*/ 2>/dev/null | sort -rn | head -10 | while read size dir; do
+        dirname=$(basename "$dir")
+        printf "    %-30s %sMB\n" "$dirname" "$size"
+    done
+    echo ""
+    
+    # 应用容器 Top 10
+    CONTAINERS="$HOME/Library/Containers"
+    if [ -d "$CONTAINERS" ]; then
+        echo -e "  ${CYAN}应用容器 Top 10 (~/Library/Containers):${NC}"
+        echo ""
+        du -sm "$CONTAINERS"/*/ 2>/dev/null | sort -rn | head -10 | while read size dir; do
+            dirname=$(basename "$dir")
+            printf "    %-45s %sMB\n" "$dirname" "$size"
+        done
+        echo ""
+    fi
+    
+    print_info "分析完成。大型应用缓存建议在对应应用内清理（如微信、QQ等）"
+}
+
+# ----------------------------------------------------------------------------
 # 主菜单
 # ----------------------------------------------------------------------------
 show_menu() {
     echo ""
     echo -e "${CYAN}请选择修复选项:${NC}"
     echo ""
-    echo -e "${YELLOW}== 缓存清理 ==${NC}"
+    echo -e "${YELLOW}== Windsurf 缓存清理 ==${NC}"
     echo "  1) 清理 Cascade 缓存 (会清理对话历史)"
     echo "  2) 清理启动缓存 (不清理对话历史，推荐)"
     echo "  3) 清理扩展缓存 (不清理对话历史)"
     echo ""
+    echo -e "${YELLOW}== 系统缓存清理 ==${NC}"
+    echo "  4) 清理开发工具缓存 (npm/pip/Homebrew/Maven等)"
+    echo "  5) 清理 macOS 系统缓存 (日志/废纸篓/旧备份等)"
+    echo "  6) 磁盘空间分析"
+    echo ""
     echo -e "${YELLOW}== MCP 相关 ==${NC}"
-    echo "  4) MCP 诊断 (检查MCP加载问题)"
-    echo "  5) 重置 MCP 配置"
+    echo "  7) MCP 诊断 (检查MCP加载问题)"
+    echo "  8) 重置 MCP 配置"
     echo ""
     echo -e "${YELLOW}== 终端相关 ==${NC}"
-    echo "  6) 检测 zsh 主题冲突"
-    echo "  7) 配置终端设置"
-    echo "  8) 启用 Legacy 终端"
+    echo "  9) 检测 zsh 主题冲突"
+    echo "  10) 配置终端设置"
+    echo "  11) 启用 Legacy 终端"
     echo ""
     echo -e "${YELLOW}== 其他 ==${NC}"
-    echo "  9) 修复 'Windsurf已损坏' 问题"
-    echo "  10) 生成诊断报告"
-    echo "  11) 完整修复 (执行所有步骤)"
+    echo "  12) 修复 'Windsurf已损坏' 问题"
+    echo "  13) 生成诊断报告"
+    echo "  14) 完整修复 (执行所有步骤)"
     echo ""
     echo "  0) 退出"
     echo ""
-    read -p "$(echo -e ${CYAN}请输入选项 [0-11]: ${NC})" choice
+    read -p "$(echo -e ${CYAN}请输入选项 [0-14]: ${NC})" choice
     
     case $choice in
         1) check_windsurf_running; clean_cascade_cache ;;
         2) clean_startup_cache ;;
         3) check_windsurf_running; clean_extension_cache ;;
-        4) diagnose_mcp ;;
-        5) reset_mcp_config ;;
-        6) detect_zsh_theme_conflicts ;;
-        7) configure_terminal_settings ;;
-        8) enable_legacy_terminal ;;
-        9) fix_damaged_app ;;
-        10) generate_diagnostic_report ;;
-        11) full_repair ;;
+        4) clean_dev_caches ;;
+        5) clean_system_caches ;;
+        6) analyze_disk_usage ;;
+        7) diagnose_mcp ;;
+        8) reset_mcp_config ;;
+        9) detect_zsh_theme_conflicts ;;
+        10) configure_terminal_settings ;;
+        11) enable_legacy_terminal ;;
+        12) fix_damaged_app ;;
+        13) generate_diagnostic_report ;;
+        14) full_repair ;;
         0) 
             echo ""
             print_info "感谢使用 Windsurf 修复工具"
