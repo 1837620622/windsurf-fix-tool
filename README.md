@@ -230,28 +230,27 @@ rm -rf ~/.codeium/windsurf/CachedExtensions
 
 **支持清理的缓存类型:**
 
-| 缓存类型 | macOS 路径 | Linux 路径 |
-|----------|-----------|-----------|
-| npm | `~/.npm` | `~/.npm` |
-| pip | `~/Library/Caches/pip` | `~/.cache/pip` |
-| Homebrew | `~/Library/Caches/Homebrew` | - |
-| apt | - | `/var/cache/apt/archives` |
-| uv | `~/.cache/uv` | `~/.cache/uv` |
-| Maven | `~/.m2/repository` | `~/.m2/repository` |
-| Gradle | `~/.gradle/caches` | `~/.gradle/caches` |
-| Yarn | `~/Library/Caches/Yarn` | `~/.cache/yarn` |
-| pnpm | `~/Library/pnpm` | `~/.pnpm-store` |
-| Selenium/WebDriver | `~/.cache/selenium` + `~/.wdm` | `~/.cache/selenium` + `~/.wdm` |
-| Go | `~/go/pkg/mod/cache` | `~/go/pkg/mod/cache` |
-| Cargo | `~/.cargo/registry` | `~/.cargo/registry` |
-| conda | `~/miniconda3/pkgs` | `~/miniconda3/pkgs` |
-| CocoaPods | `~/Library/Caches/CocoaPods` | - |
-| Xcode DerivedData | `~/Library/Developer/Xcode/DerivedData` | - |
-| Docker | Docker Desktop 数据 | Docker 数据 |
+| 缓存类型 | macOS 路径 | Linux 路径 | Windows 路径 |
+|----------|-----------|-----------|-------------|
+| npm | `~/.npm` | `~/.npm` | `%APPDATA%\npm-cache` |
+| pip | `~/Library/Caches/pip` | `~/.cache/pip` | `%LOCALAPPDATA%\pip\cache` |
+| Homebrew | `~/Library/Caches/Homebrew` | - | - |
+| apt/yum/dnf | - | `/var/cache/apt/archives` 等 | - |
+| uv | `~/.cache/uv` | `~/.cache/uv` | `%LOCALAPPDATA%\uv\cache` |
+| Maven | `~/.m2/repository` | `~/.m2/repository` | `%USERPROFILE%\.m2\repository` |
+| Gradle | `~/.gradle/caches` | `~/.gradle/caches` | `%USERPROFILE%\.gradle\caches` |
+| Yarn | `~/Library/Caches/Yarn` | `~/.cache/yarn` | `%LOCALAPPDATA%\Yarn\Cache` |
+| pnpm | `~/Library/pnpm` | `~/.pnpm-store` | `%LOCALAPPDATA%\pnpm-store` |
+| NuGet | - | - | `%USERPROFILE%\.nuget\packages` |
+| Selenium/WebDriver | `~/.cache/selenium` + `~/.wdm` | `~/.cache/selenium` + `~/.wdm` | `%USERPROFILE%\.cache\selenium` |
+| Go | `~/go/pkg/mod/cache` | `~/go/pkg/mod/cache` | `%USERPROFILE%\go\pkg\mod\cache` |
+| Cargo | `~/.cargo/registry` | `~/.cargo/registry` | `%USERPROFILE%\.cargo\registry` |
+| conda | `~/miniconda3/pkgs` | `~/miniconda3/pkgs` | `%USERPROFILE%\miniconda3\pkgs` |
+| CocoaPods | `~/Library/Caches/CocoaPods` | - | - |
+| Xcode DerivedData | `~/Library/Developer/Xcode/DerivedData` | - | - |
+| Docker | Docker Desktop 数据 | Docker 数据 | Docker Desktop 数据 |
 
 **使用方法:** 运行工具选择"清理开发工具缓存"，支持全部清理或逐项选择
-
-> Windows 额外支持: NuGet (`%USERPROFILE%\.nuget\packages`)
 
 ### 13. 系统缓存和垃圾文件清理
 

@@ -122,7 +122,7 @@ sudo chmod 4755 /path/to/windsurf/chrome-sandbox
 
 ### 7. Dev Tool Cache Cleanup
 
-Supports cleaning caches for: npm, pip, Homebrew, apt/yum/dnf, uv, Maven, Gradle, Yarn, pnpm, Selenium/WebDriver, Go modules, Cargo/Rust, conda, CocoaPods, Xcode DerivedData, Docker.
+Supports cleaning caches for: npm, pip, Homebrew, apt/yum/dnf, uv, Maven, Gradle, Yarn, pnpm, NuGet, Selenium/WebDriver, Go modules, Cargo/Rust, conda, CocoaPods, Xcode DerivedData, Docker.
 
 Run the tool and select "Clean Dev Tool Caches" - supports batch cleanup or item-by-item selection.
 
@@ -132,9 +132,11 @@ Run the tool and select "Clean Dev Tool Caches" - supports batch cleanup or item
 
 **Linux:** User caches (`~/.cache`), system logs (`/var/log` 30+ days), temp files (`/tmp` 7+ days), systemd journal logs, old Windsurf backups, DNS cache flush.
 
+**Windows:** User temp files (`%TEMP%`), Windows temp files (`%SystemRoot%\Temp`, admin required), Recycle Bin, Windows Update cache, old Windsurf backups, old diagnostic reports, DNS cache flush.
+
 ### 9. Disk Usage Analysis
 
-Analyze disk space usage including directory sizes, hidden folder rankings, Library subdirectory rankings (macOS), and app container usage (macOS).
+Analyze disk space usage including directory sizes, hidden folder rankings, Library subdirectory rankings (macOS), AppData directory usage (Windows), and app container usage (macOS).
 
 ## 🌐 Network Whitelist
 
