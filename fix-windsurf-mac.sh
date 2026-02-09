@@ -403,6 +403,7 @@ full_repair() {
         check_windsurf_running
         clean_cascade_cache
         clean_extension_cache
+        clean_startup_cache
         fix_damaged_app
         configure_terminal_settings
         detect_zsh_theme_conflicts

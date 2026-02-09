@@ -80,6 +80,18 @@ This clears GPU cache, code cache, and extension cache **without** affecting you
 rm -rf ~/Library/Application\ Support/Windsurf/GPUCache
 rm -rf ~/Library/Application\ Support/Windsurf/Code\ Cache
 rm -rf ~/.codeium/windsurf/CachedData
+
+# Manual cleanup (Linux)
+rm -rf ~/.config/Windsurf/GPUCache
+rm -rf ~/.config/Windsurf/Code\ Cache
+rm -rf ~/.codeium/windsurf/CachedData
+```
+
+```powershell
+# Manual cleanup (Windows PowerShell)
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\GPUCache"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Code Cache"
+Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedData"
 ```
 
 ### 2. MCP Not Auto-Loading

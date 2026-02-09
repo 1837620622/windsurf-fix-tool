@@ -222,6 +222,20 @@ rm -rf ~/Library/Application\ Support/Windsurf/GPUCache
 rm -rf ~/Library/Application\ Support/Windsurf/Code\ Cache
 rm -rf ~/.codeium/windsurf/CachedData
 rm -rf ~/.codeium/windsurf/CachedExtensions
+
+# Linux
+rm -rf ~/.config/Windsurf/GPUCache
+rm -rf ~/.config/Windsurf/Code\ Cache
+rm -rf ~/.codeium/windsurf/CachedData
+rm -rf ~/.codeium/windsurf/CachedExtensions
+```
+
+```powershell
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\GPUCache"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Code Cache"
+Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedData"
+Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedExtensions"
 ```
 
 **注意:** 对话历史保存在 `~/.codeium/windsurf/cascade` 目录，上述清理操作不会影响它。
