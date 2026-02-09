@@ -3,6 +3,8 @@
 # 用于修复 Windsurf IDE 卡顿、Shell无法连接等常见问题
 # 基于官方文档: https://docs.windsurf.com/troubleshooting/windsurf-common-issues
 # 使用方法: 以管理员身份运行 PowerShell，执行 .\fix-windsurf-win.ps1
+# 作者: 传康KK
+# GitHub: https://github.com/1837620622/windsurf-fix-tool
 # ============================================================================
 
 #Requires -Version 5.1
@@ -44,6 +46,8 @@ function Write-Header {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "  Windsurf 修复工具 - Windows" -ForegroundColor Cyan
+    Write-Host "  by 传康KK" -ForegroundColor Cyan
+    Write-Host "  github.com/1837620622/windsurf-fix-tool" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 }
