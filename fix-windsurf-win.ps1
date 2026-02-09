@@ -174,7 +174,611 @@ function Clear-ExtensionCache {
 }
 
 # ----------------------------------------------------------------------------
-# 功能3: 配置终端设置
+# 功能3: 清理启动缓存（不清理对话历史）
+# ----------------------------------------------------------------------------
+function Clear-StartupCache {
+    Write-ColorOutput "清理启动相关缓存（解决启动卡顿）..." "Info"
+    
+    Write-Host ""
+    Write-Host "此操作将清理以下缓存以加速启动:"
+    Write-Host "  - GPUCache (GPU渲染缓存)"
+    Write-Host "  - CachedData (编辑器缓存数据)"
+    Write-Host "  - CachedExtensions (扩展缓存)"
+    Write-Host "  - Code Cache (代码缓存)"
+    Write-Host "  - 7天以上的日志文件"
+    Write-Host ""
+    Write-ColorOutput "此操作 不会 清理对话历史！" "Success"
+    Write-Host ""
+    
+    if (Confirm-Action) {
+        if (-not (Test-WindsurfRunning)) { return }
+        
+        $windsurfAppData = "$env:APPDATA\Windsurf"
+        
+        # 清理 GPUCache
+        $gpuCache = "$windsurfAppData\GPUCache"
+        if (Test-Path $gpuCache) {
+            Remove-Item -Path $gpuCache -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "已清理 GPUCache" "Success"
+        }
+        
+        # 清理 CachedData
+        $cachedData = "$WindsurfDir\CachedData"
+        if (Test-Path $cachedData) {
+            Remove-Item -Path $cachedData -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "已清理 CachedData" "Success"
+        }
+        
+        # 清理 CachedExtensions
+        $cachedExt = "$WindsurfDir\CachedExtensions"
+        if (Test-Path $cachedExt) {
+            Remove-Item -Path $cachedExt -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "已清理 CachedExtensions" "Success"
+        }
+        
+        # 清理 Code Cache
+        $codeCache = "$windsurfAppData\Code Cache"
+        if (Test-Path $codeCache) {
+            Remove-Item -Path $codeCache -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "已清理 Code Cache" "Success"
+        }
+        
+        # 清理旧日志
+        $logsDir = "$windsurfAppData\logs"
+        if (Test-Path $logsDir) {
+            Get-ChildItem -Path $logsDir -File -Recurse | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "已清理旧日志文件" "Success"
+        }
+        
+        Write-Host ""
+        Write-ColorOutput "启动缓存清理完成！" "Success"
+        Write-ColorOutput "重启 Windsurf 后启动速度应该会改善" "Info"
+    }
+    else {
+        Write-ColorOutput "已取消操作" "Info"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 功能4: MCP诊断
+# ----------------------------------------------------------------------------
+function Test-MCP {
+    Write-ColorOutput "MCP (Model Context Protocol) 诊断..." "Info"
+    
+    $mcpConfig = "$WindsurfDir\mcp_config.json"
+    $mcpConfigOld = "$CodeiumDir\mcp_config.json"
+    
+    Write-Host ""
+    Write-Host "MCP 配置文件状态:" -ForegroundColor Cyan
+    Write-Host ""
+    
+    if (Test-Path $mcpConfig) {
+        Write-ColorOutput "找到 MCP 配置: $mcpConfig" "Success"
+        Write-Host ""
+        Write-Host "配置内容预览:"
+        Get-Content $mcpConfig -TotalCount 30 | ForEach-Object { Write-Host "  $_" }
+        Write-Host ""
+        
+        # 验证 JSON 格式
+        try {
+            $null = Get-Content $mcpConfig -Raw | ConvertFrom-Json
+            Write-ColorOutput "MCP 配置 JSON 格式有效" "Success"
+        }
+        catch {
+            Write-ColorOutput "MCP 配置 JSON 格式无效！" "Error"
+        }
+    }
+    else {
+        Write-ColorOutput "未找到 MCP 配置文件: $mcpConfig" "Warning"
+    }
+    
+    if (Test-Path $mcpConfigOld) {
+        Write-ColorOutput "发现旧版 MCP 配置: $mcpConfigOld" "Info"
+    }
+    
+    Write-Host ""
+    Write-Host "运行时检查:" -ForegroundColor Cyan
+    Write-Host ""
+    
+    # 检查 Node.js
+    try {
+        $nodeVersion = & node --version 2>$null
+        Write-ColorOutput "Node.js: $nodeVersion" "Success"
+    }
+    catch {
+        Write-ColorOutput "未找到 Node.js" "Warning"
+    }
+    
+    # 检查 npx
+    try {
+        $null = Get-Command npx -ErrorAction Stop
+        Write-ColorOutput "npx 可用" "Success"
+    }
+    catch {
+        Write-ColorOutput "未找到 npx" "Warning"
+    }
+    
+    # 检查 Python
+    try {
+        $pyVersion = & python --version 2>$null
+        Write-ColorOutput "Python: $pyVersion" "Success"
+    }
+    catch {
+        Write-ColorOutput "未找到 Python" "Warning"
+    }
+    
+    # 检查 uvx
+    try {
+        $null = Get-Command uvx -ErrorAction Stop
+        Write-ColorOutput "uvx 可用" "Success"
+    }
+    catch {
+        Write-ColorOutput "uvx 未安装" "Info"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 功能5: 重置MCP配置
+# ----------------------------------------------------------------------------
+function Reset-MCPConfig {
+    Write-ColorOutput "重置 MCP 配置..." "Info"
+    
+    $mcpConfig = "$WindsurfDir\mcp_config.json"
+    
+    Write-Host ""
+    Write-ColorOutput "此操作将备份并重置 MCP 配置文件" "Warning"
+    Write-Host ""
+    
+    if (-not (Test-Path $mcpConfig)) {
+        Write-ColorOutput "MCP 配置文件不存在" "Info"
+        return
+    }
+    
+    if (Confirm-Action) {
+        New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
+        Copy-Item -Path $mcpConfig -Destination "$BackupDir\mcp_config.json.bak" -Force
+        Write-ColorOutput "已备份到: $BackupDir\mcp_config.json.bak" "Info"
+        
+        @'
+{
+  "mcpServers": {}
+}
+'@ | Out-File -FilePath $mcpConfig -Encoding UTF8
+        
+        Write-ColorOutput "MCP 配置已重置" "Success"
+    }
+    else {
+        Write-ColorOutput "已取消操作" "Info"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 功能6: 清理开发工具缓存
+# ----------------------------------------------------------------------------
+function Clear-DevCaches {
+    Write-ColorOutput "扫描开发工具缓存..." "Info"
+    
+    Write-Host ""
+    Write-Host "正在检测各类开发工具缓存大小..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    $totalSize = 0
+    $cleanableItems = @()
+    
+    # npm 缓存
+    $npmCache = "$env:APPDATA\npm-cache"
+    if (Test-Path $npmCache) {
+        $size = [math]::Round((Get-ChildItem $npmCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [npm 缓存] $npmCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "npm"
+    }
+    
+    # pip 缓存
+    $pipCache = "$env:LOCALAPPDATA\pip\cache"
+    if (Test-Path $pipCache) {
+        $size = [math]::Round((Get-ChildItem $pipCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [pip 缓存] $pipCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "pip"
+    }
+    
+    # uv 缓存
+    $uvCache = "$env:LOCALAPPDATA\uv\cache"
+    if (Test-Path $uvCache) {
+        $size = [math]::Round((Get-ChildItem $uvCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [uv 缓存] $uvCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "uv"
+    }
+    
+    # Maven 缓存
+    $mavenCache = "$env:USERPROFILE\.m2\repository"
+    if (Test-Path $mavenCache) {
+        $size = [math]::Round((Get-ChildItem $mavenCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Maven 缓存] $mavenCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "maven"
+    }
+    
+    # Gradle 缓存
+    $gradleCache = "$env:USERPROFILE\.gradle\caches"
+    if (Test-Path $gradleCache) {
+        $size = [math]::Round((Get-ChildItem $gradleCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Gradle 缓存] $gradleCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "gradle"
+    }
+    
+    # Yarn 缓存
+    $yarnCache = "$env:LOCALAPPDATA\Yarn\Cache"
+    if (Test-Path $yarnCache) {
+        $size = [math]::Round((Get-ChildItem $yarnCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Yarn 缓存] $yarnCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "yarn"
+    }
+    
+    # pnpm 缓存
+    $pnpmStore = "$env:LOCALAPPDATA\pnpm-store"
+    if (Test-Path $pnpmStore) {
+        $size = [math]::Round((Get-ChildItem $pnpmStore -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [pnpm 缓存] $pnpmStore - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "pnpm"
+    }
+    
+    # NuGet 缓存
+    $nugetCache = "$env:USERPROFILE\.nuget\packages"
+    if (Test-Path $nugetCache) {
+        $size = [math]::Round((Get-ChildItem $nugetCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [NuGet 缓存] $nugetCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "nuget"
+    }
+    
+    # Selenium/WebDriver 缓存
+    $seleniumCache = "$env:USERPROFILE\.cache\selenium"
+    $wdmCache = "$env:USERPROFILE\.wdm"
+    $selSize = 0
+    if (Test-Path $seleniumCache) {
+        $selSize += [math]::Round((Get-ChildItem $seleniumCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+    }
+    if (Test-Path $wdmCache) {
+        $selSize += [math]::Round((Get-ChildItem $wdmCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+    }
+    if ($selSize -gt 0) {
+        Write-Host "  [Selenium/WebDriver] - " -NoNewline; Write-Host "${selSize}MB" -ForegroundColor Yellow
+        $totalSize += $selSize
+        $cleanableItems += "selenium"
+    }
+    
+    # Go 缓存
+    $goCache = "$env:USERPROFILE\go\pkg\mod\cache"
+    if (Test-Path $goCache) {
+        $size = [math]::Round((Get-ChildItem $goCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Go 模块缓存] $goCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "go"
+    }
+    
+    # Cargo/Rust 缓存
+    $cargoCache = "$env:USERPROFILE\.cargo\registry"
+    if (Test-Path $cargoCache) {
+        $size = [math]::Round((Get-ChildItem $cargoCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Cargo 缓存] $cargoCache - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+        $cleanableItems += "cargo"
+    }
+    
+    # conda 缓存
+    foreach ($condaDir in @("$env:USERPROFILE\miniconda3\pkgs", "$env:USERPROFILE\anaconda3\pkgs")) {
+        if (Test-Path $condaDir) {
+            $size = [math]::Round((Get-ChildItem $condaDir -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+            Write-Host "  [conda 包缓存] $condaDir - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+            $totalSize += $size
+            $cleanableItems += "conda"
+            break
+        }
+    }
+    
+    Write-Host ""
+    Write-Host "  可清理总计: " -NoNewline -ForegroundColor Cyan; Write-Host "${totalSize}MB" -ForegroundColor Yellow
+    Write-Host ""
+    
+    if ($cleanableItems.Count -eq 0) {
+        Write-ColorOutput "未检测到可清理的开发工具缓存" "Info"
+        return
+    }
+    
+    Write-Host "请选择清理方式:" -ForegroundColor Yellow
+    Write-Host "  1) 全部清理（推荐安全项）"
+    Write-Host "  2) 逐项选择清理"
+    Write-Host "  3) 取消"
+    Write-Host ""
+    $cleanChoice = Read-Host "请选择 [1-3]"
+    
+    switch ($cleanChoice) {
+        "1" {
+            foreach ($item in $cleanableItems) {
+                switch ($item) {
+                    "npm" {
+                        try { & npm cache clean --force 2>$null } catch { Remove-Item "$npmCache\_cacache" -Recurse -Force -ErrorAction SilentlyContinue }
+                        Write-ColorOutput "npm 缓存已清理" "Success"
+                    }
+                    "pip" {
+                        try { & pip cache purge 2>$null } catch { Remove-Item $pipCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        Write-ColorOutput "pip 缓存已清理" "Success"
+                    }
+                    "uv" {
+                        Remove-Item $uvCache -Recurse -Force -ErrorAction SilentlyContinue
+                        Write-ColorOutput "uv 缓存已清理" "Success"
+                    }
+                    "maven" { Write-ColorOutput "Maven 缓存跳过（删除后需重新下载依赖）" "Warning" }
+                    "gradle" { Write-ColorOutput "Gradle 缓存跳过（删除后需重新下载依赖）" "Warning" }
+                    "yarn" {
+                        try { & yarn cache clean 2>$null } catch { Remove-Item $yarnCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        Write-ColorOutput "Yarn 缓存已清理" "Success"
+                    }
+                    "pnpm" {
+                        try { & pnpm store prune 2>$null } catch {}
+                        Write-ColorOutput "pnpm 缓存已清理" "Success"
+                    }
+                    "nuget" { Write-ColorOutput "NuGet 缓存跳过（建议使用 dotnet nuget locals all --clear）" "Warning" }
+                    "selenium" {
+                        Remove-Item $seleniumCache -Recurse -Force -ErrorAction SilentlyContinue
+                        Remove-Item $wdmCache -Recurse -Force -ErrorAction SilentlyContinue
+                        Write-ColorOutput "Selenium/WebDriver 缓存已清理" "Success"
+                    }
+                    "go" {
+                        try { & go clean -modcache 2>$null } catch {}
+                        Write-ColorOutput "Go 模块缓存已清理" "Success"
+                    }
+                    "cargo" { Write-ColorOutput "Cargo 缓存跳过" "Warning" }
+                    "conda" {
+                        try { & conda clean --all -y 2>$null } catch {}
+                        Write-ColorOutput "conda 缓存已清理" "Success"
+                    }
+                }
+            }
+            Write-Host ""
+            Write-ColorOutput "开发工具缓存清理完成！" "Success"
+        }
+        "2" {
+            foreach ($item in $cleanableItems) {
+                $label = switch ($item) {
+                    "npm" { "npm 缓存" }
+                    "pip" { "pip 缓存" }
+                    "uv" { "uv 缓存" }
+                    "maven" { "Maven 缓存" }
+                    "gradle" { "Gradle 缓存" }
+                    "yarn" { "Yarn 缓存" }
+                    "pnpm" { "pnpm 缓存" }
+                    "nuget" { "NuGet 缓存" }
+                    "selenium" { "Selenium/WebDriver 缓存" }
+                    "go" { "Go 模块缓存" }
+                    "cargo" { "Cargo 缓存" }
+                    "conda" { "conda 包缓存" }
+                    default { $item }
+                }
+                
+                if (Confirm-Action "清理 ${label}？") {
+                    switch ($item) {
+                        "npm" { try { & npm cache clean --force 2>$null } catch { Remove-Item "$npmCache\_cacache" -Recurse -Force -ErrorAction SilentlyContinue } }
+                        "pip" { try { & pip cache purge 2>$null } catch { Remove-Item $pipCache -Recurse -Force -ErrorAction SilentlyContinue } }
+                        "uv" { Remove-Item $uvCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        "maven" { Remove-Item $mavenCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        "gradle" { Remove-Item $gradleCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        "yarn" { try { & yarn cache clean 2>$null } catch { Remove-Item $yarnCache -Recurse -Force -ErrorAction SilentlyContinue } }
+                        "pnpm" { try { & pnpm store prune 2>$null } catch {} }
+                        "nuget" { try { & dotnet nuget locals all --clear 2>$null } catch { Remove-Item $nugetCache -Recurse -Force -ErrorAction SilentlyContinue } }
+                        "selenium" { Remove-Item $seleniumCache, $wdmCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        "go" { try { & go clean -modcache 2>$null } catch {} }
+                        "cargo" { Remove-Item $cargoCache -Recurse -Force -ErrorAction SilentlyContinue }
+                        "conda" { try { & conda clean --all -y 2>$null } catch {} }
+                    }
+                    Write-ColorOutput "$label 已清理" "Success"
+                }
+            }
+        }
+        default { Write-ColorOutput "已取消操作" "Info" }
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 功能7: 清理Windows系统缓存
+# ----------------------------------------------------------------------------
+function Clear-SystemCaches {
+    Write-ColorOutput "扫描 Windows 系统缓存..." "Info"
+    
+    Write-Host ""
+    Write-Host "正在检测系统级缓存..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    $totalSize = 0
+    
+    # 用户临时文件
+    $userTemp = $env:TEMP
+    if (Test-Path $userTemp) {
+        $size = [math]::Round((Get-ChildItem $userTemp -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [用户临时文件] $userTemp - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+    }
+    
+    # Windows 临时文件
+    $winTemp = "$env:SystemRoot\Temp"
+    if (Test-Path $winTemp) {
+        $size = [math]::Round((Get-ChildItem $winTemp -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Windows 临时文件] $winTemp - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+    }
+    
+    # 回收站
+    $recycleBin = (New-Object -ComObject Shell.Application).Namespace(0xA)
+    $rbCount = $recycleBin.Items().Count
+    if ($rbCount -gt 0) {
+        Write-Host "  [回收站] ${rbCount}个项目" -ForegroundColor Green
+    }
+    
+    # Windows Update 缓存
+    $wuCache = "$env:SystemRoot\SoftwareDistribution\Download"
+    if (Test-Path $wuCache) {
+        $size = [math]::Round((Get-ChildItem $wuCache -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Windows Update 缓存] - " -NoNewline; Write-Host "${size}MB" -ForegroundColor Yellow
+        $totalSize += $size
+    }
+    
+    # Windsurf 旧备份
+    $backups = Get-ChildItem "$env:USERPROFILE\.windsurf-backup-*" -Directory -ErrorAction SilentlyContinue
+    if ($backups) {
+        $bkSize = [math]::Round(($backups | Get-ChildItem -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+        Write-Host "  [Windsurf 旧备份] $($backups.Count)个备份目录 - " -NoNewline; Write-Host "${bkSize}MB" -ForegroundColor Yellow
+        $totalSize += $bkSize
+    }
+    
+    # 旧诊断报告
+    $diagReports = Get-ChildItem "$env:USERPROFILE\windsurf-diagnostic-*.txt" -ErrorAction SilentlyContinue
+    if ($diagReports) {
+        Write-Host "  [旧诊断报告] $($diagReports.Count)个文件" -ForegroundColor Green
+    }
+    
+    # DNS 缓存
+    Write-Host "  [DNS 缓存] 系统DNS缓存（可刷新）" -ForegroundColor Green
+    
+    Write-Host ""
+    Write-Host "  系统缓存总计: " -NoNewline -ForegroundColor Cyan; Write-Host "${totalSize}MB" -ForegroundColor Yellow
+    Write-Host ""
+    
+    Write-Host "请选择清理项目:" -ForegroundColor Yellow
+    Write-Host "  1) 清理用户临时文件"
+    Write-Host "  2) 清理 Windows 临时文件（需管理员）"
+    Write-Host "  3) 清空回收站"
+    Write-Host "  4) 清理 Windsurf 旧备份目录"
+    Write-Host "  5) 清理旧诊断报告"
+    Write-Host "  6) 刷新 DNS 缓存"
+    Write-Host "  7) 全部执行（安全项）"
+    Write-Host "  0) 取消"
+    Write-Host ""
+    $sysChoice = Read-Host "请选择 [0-7]"
+    
+    switch ($sysChoice) {
+        "1" {
+            Get-ChildItem $userTemp -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "用户临时文件已清理（保留7天内）" "Success"
+        }
+        "2" {
+            if (Test-Administrator) {
+                Get-ChildItem $winTemp -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "Windows 临时文件已清理" "Success"
+            }
+            else {
+                Write-ColorOutput "需要管理员权限" "Error"
+            }
+        }
+        "3" {
+            if (Confirm-Action) {
+                Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "回收站已清空" "Success"
+            }
+        }
+        "4" {
+            if ($backups) {
+                Write-ColorOutput "将删除 $($backups.Count) 个 Windsurf 旧备份目录" "Info"
+                if (Confirm-Action) {
+                    $backups | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                    Write-ColorOutput "Windsurf 旧备份已清理" "Success"
+                }
+            }
+            else {
+                Write-ColorOutput "没有旧备份需要清理" "Info"
+            }
+        }
+        "5" {
+            if ($diagReports) {
+                $diagReports | Remove-Item -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "旧诊断报告已清理" "Success"
+            }
+        }
+        "6" {
+            ipconfig /flushdns 2>$null | Out-Null
+            Write-ColorOutput "DNS 缓存已刷新" "Success"
+        }
+        "7" {
+            Write-ColorOutput "执行全部安全清理项..." "Info"
+            
+            Get-ChildItem $userTemp -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "用户临时文件已清理" "Success"
+            
+            if ($backups) {
+                $backups | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "Windsurf 旧备份已清理" "Success"
+            }
+            
+            if ($diagReports) {
+                $diagReports | Remove-Item -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "旧诊断报告已清理" "Success"
+            }
+            
+            ipconfig /flushdns 2>$null | Out-Null
+            Write-ColorOutput "DNS 缓存已刷新" "Success"
+            
+            Write-Host ""
+            Write-ColorOutput "系统缓存清理完成！" "Success"
+        }
+        default { Write-ColorOutput "已取消操作" "Info" }
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 功能8: 磁盘空间分析
+# ----------------------------------------------------------------------------
+function Get-DiskAnalysis {
+    Write-ColorOutput "分析磁盘空间使用情况..." "Info"
+    
+    Write-Host ""
+    Write-Host "========== 磁盘空间概览 ==========" -ForegroundColor Cyan
+    Write-Host ""
+    
+    # 磁盘总体使用
+    Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object {
+        $free = [math]::Round($_.FreeSpace / 1GB, 2)
+        $total = [math]::Round($_.Size / 1GB, 2)
+        $used = [math]::Round(($_.Size - $_.FreeSpace) / 1GB, 2)
+        $pct = [math]::Round(($_.Size - $_.FreeSpace) / $_.Size * 100, 1)
+        Write-Host "  $($_.DeviceID) 总容量: ${total}GB | 已使用: ${used}GB | 可用: ${free}GB | 使用率: ${pct}%"
+    }
+    Write-Host ""
+    
+    # 用户主目录
+    Write-Host "  用户主目录主要文件夹:" -ForegroundColor Cyan
+    Write-Host ""
+    
+    foreach ($dir in @("Downloads", "Documents", "Desktop", "Videos", "Music", "Pictures")) {
+        $path = "$env:USERPROFILE\$dir"
+        if (Test-Path $path) {
+            $size = [math]::Round((Get-ChildItem $path -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+            Write-Host ("    {0,-15} {1}MB" -f $dir, $size)
+        }
+    }
+    Write-Host ""
+    
+    # AppData 大小
+    Write-Host "  AppData 目录:" -ForegroundColor Cyan
+    Write-Host ""
+    foreach ($dir in @("Local", "Roaming", "LocalLow")) {
+        $path = "$env:USERPROFILE\AppData\$dir"
+        if (Test-Path $path) {
+            $size = [math]::Round((Get-ChildItem $path -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB)
+            Write-Host ("    {0,-15} {1}MB" -f $dir, $size)
+        }
+    }
+    Write-Host ""
+    
+    Write-ColorOutput "分析完成。大型应用缓存建议在对应应用内清理" "Info"
+}
+
+# ----------------------------------------------------------------------------
+# 功能9: 配置终端设置
 # ----------------------------------------------------------------------------
 function Set-TerminalSettings {
     Write-ColorOutput "配置终端设置..." "Info"
@@ -362,7 +966,7 @@ function Clear-TempFiles {
 }
 
 # ----------------------------------------------------------------------------
-# 功能8: 完整修复
+# 功能14: 完整修复
 # ----------------------------------------------------------------------------
 function Start-FullRepair {
     Write-ColorOutput "执行完整修复..." "Info"
@@ -375,6 +979,7 @@ function Start-FullRepair {
         
         Clear-CascadeCache
         Clear-ExtensionCache
+        Clear-StartupCache
         Set-TerminalSettings
         Test-UpdateIssues
         Set-PSExecutionPolicy
@@ -437,31 +1042,52 @@ function Show-Menu {
     Write-Host ""
     Write-Host "请选择修复选项:" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  1) 清理 Cascade 缓存 (解决启动失败/卡顿)"
-    Write-Host "  2) 清理扩展缓存"
-    Write-Host "  3) 配置终端设置"
-    Write-Host "  4) 检查更新问题"
-    Write-Host "  5) 修复 PowerShell 执行策略"
-    Write-Host "  6) 生成诊断报告"
-    Write-Host "  7) 清理临时文件"
-    Write-Host "  8) 检查网络连接"
-    Write-Host "  9) 完整修复 (执行所有步骤)"
+    Write-Host "== Windsurf 缓存清理 ==" -ForegroundColor Yellow
+    Write-Host "  1) 清理 Cascade 缓存 (会清理对话历史)"
+    Write-Host "  2) 清理启动缓存 (不清理对话历史，推荐)"
+    Write-Host "  3) 清理扩展缓存 (不清理对话历史)"
+    Write-Host ""
+    Write-Host "== 系统缓存清理 ==" -ForegroundColor Yellow
+    Write-Host "  4) 清理开发工具缓存 (npm/pip/NuGet/Maven等)"
+    Write-Host "  5) 清理 Windows 系统缓存 (临时文件/回收站/旧备份等)"
+    Write-Host "  6) 磁盘空间分析"
+    Write-Host ""
+    Write-Host "== MCP 相关 ==" -ForegroundColor Yellow
+    Write-Host "  7) MCP 诊断 (检查MCP加载问题)"
+    Write-Host "  8) 重置 MCP 配置"
+    Write-Host ""
+    Write-Host "== 终端相关 ==" -ForegroundColor Yellow
+    Write-Host "  9) 配置终端设置"
+    Write-Host "  10) 修复 PowerShell 执行策略"
+    Write-Host ""
+    Write-Host "== 其他 ==" -ForegroundColor Yellow
+    Write-Host "  11) 检查更新问题"
+    Write-Host "  12) 检查网络连接"
+    Write-Host "  13) 清理 Windsurf 临时文件"
+    Write-Host "  14) 生成诊断报告"
+    Write-Host "  15) 完整修复 (执行所有步骤)"
     Write-Host ""
     Write-Host "  0) 退出"
     Write-Host ""
     
-    $choice = Read-Host "请输入选项 [0-9]"
+    $choice = Read-Host "请输入选项 [0-15]"
     
     switch ($choice) {
         "1" { if (Test-WindsurfRunning) { Clear-CascadeCache } }
-        "2" { if (Test-WindsurfRunning) { Clear-ExtensionCache } }
-        "3" { Set-TerminalSettings }
-        "4" { Test-UpdateIssues }
-        "5" { Set-PSExecutionPolicy }
-        "6" { New-DiagnosticReport }
-        "7" { Clear-TempFiles }
-        "8" { Test-NetworkWhitelist }
-        "9" { Start-FullRepair }
+        "2" { Clear-StartupCache }
+        "3" { if (Test-WindsurfRunning) { Clear-ExtensionCache } }
+        "4" { Clear-DevCaches }
+        "5" { Clear-SystemCaches }
+        "6" { Get-DiskAnalysis }
+        "7" { Test-MCP }
+        "8" { Reset-MCPConfig }
+        "9" { Set-TerminalSettings }
+        "10" { Set-PSExecutionPolicy }
+        "11" { Test-UpdateIssues }
+        "12" { Test-NetworkWhitelist }
+        "13" { Clear-TempFiles }
+        "14" { New-DiagnosticReport }
+        "15" { Start-FullRepair }
         "0" { 
             Write-Host ""
             Write-ColorOutput "感谢使用 Windsurf 修复工具" "Info"

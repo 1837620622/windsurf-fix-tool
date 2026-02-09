@@ -251,6 +251,8 @@ rm -rf ~/.codeium/windsurf/CachedExtensions
 
 **使用方法:** 运行工具选择"清理开发工具缓存"，支持全部清理或逐项选择
 
+> Windows 额外支持: NuGet (`%USERPROFILE%\.nuget\packages`)
+
 ### 13. 系统缓存和垃圾文件清理
 
 **macOS 支持清理:**
@@ -269,14 +271,24 @@ rm -rf ~/.codeium/windsurf/CachedExtensions
 - Windsurf 旧备份目录
 - DNS 缓存刷新
 
+**Windows 支持清理:**
+- 用户临时文件 (`%TEMP%`)
+- Windows 临时文件 (`%SystemRoot%\Temp`，需管理员）
+- 回收站
+- Windows Update 缓存
+- Windsurf 旧备份目录
+- 旧诊断报告文件
+- DNS 缓存刷新
+
 ### 14. 磁盘空间分析
 
 运行工具选择"磁盘空间分析"，可查看:
 - 磁盘总体使用情况
 - 用户主目录各子目录占用
-- 隐藏目录 Top 10
+- 隐藏目录 Top 10（macOS/Linux）
 - ~/Library 子目录排名（macOS）
 - 应用容器占用排名（macOS）
+- AppData 目录占用（Windows）
 
 ## 网络白名单
 
