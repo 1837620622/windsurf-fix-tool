@@ -175,8 +175,8 @@ echo ""
 
 # 4. npm 缓存
 print_info "4. npm 缓存"
-if command -v npm &>/dev/null; then
-    NPM_CACHE="$HOME/.npm"
+NPM_CACHE="$HOME/.npm"
+if [ -d "$NPM_CACHE" ]; then
     safe_clean_dir "$NPM_CACHE/_cacache" "npm 下载缓存"
     # 清理npx缓存
     safe_clean_dir "$NPM_CACHE/_npx" "npx 临时缓存"
@@ -392,12 +392,12 @@ if [ -d "/private/var/db/diagnostics" ]; then
     size=$(du -sk /private/var/db/diagnostics 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统诊断日志${NC}: $(format_size $size)"
     print_warning "  这些是 Apple 统一日志，删除后不影响系统运行"
+    # 在清理前先计算 uuidtext 大小
+    uuidtext_size=$(du -sk /private/var/db/uuidtext 2>/dev/null | awk '{print $1 * 1024}')
     if confirm "  清理此项（需要 sudo）？"; then
         sudo rm -rf /private/var/db/diagnostics/* 2>/dev/null
         sudo rm -rf /private/var/db/uuidtext/* 2>/dev/null
         TOTAL_FREED=$((TOTAL_FREED + size))
-        # 加上 uuidtext
-        uuidtext_size=$(du -sk /private/var/db/uuidtext 2>/dev/null | awk '{print $1 * 1024}')
         TOTAL_FREED=$((TOTAL_FREED + uuidtext_size))
         print_success "  已清理系统诊断日志和 UUID 文本"
     else
