@@ -6,6 +6,8 @@ title Windsurf 修复工具 - Windows
 :: Windsurf 修复工具 - Windows 批处理版本
 :: 用于修复 Windsurf IDE 卡顿、Shell无法连接等常见问题
 :: 使用方法: 双击运行或在命令提示符中执行
+:: 作者: 传康KK
+:: GitHub: https://github.com/1837620622/windsurf-fix-tool
 :: ============================================================================
 
 setlocal EnableDelayedExpansion
@@ -29,6 +31,8 @@ cls
 echo.
 echo %CYAN%========================================%NC%
 echo %CYAN%  Windsurf 修复工具 - Windows%NC%
+echo %CYAN%  by 传康KK%NC%
+echo %CYAN%  github.com/1837620622/windsurf-fix-tool%NC%
 echo %CYAN%========================================%NC%
 echo.
 

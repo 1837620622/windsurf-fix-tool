@@ -8,8 +8,6 @@
 # GitHub: https://github.com/1837620622/windsurf-fix-tool
 # ============================================================================
 
-set -e
-
 # ----------------------------------------------------------------------------
 # 颜色定义
 # ----------------------------------------------------------------------------
@@ -144,7 +142,6 @@ clean_cascade_cache() {
 clean_extension_cache() {
     print_info "清理扩展缓存..."
     
-    EXTENSIONS_DIR="$WINDSURF_DIR/extensions"
     CACHE_DIR="$WINDSURF_DIR/CachedData"
     
     if confirm_action; then
@@ -169,7 +166,7 @@ fix_damaged_app() {
     if [ ! -d "$WINDSURF_APP" ]; then
         print_error "未找到 Windsurf 应用: $WINDSURF_APP"
         print_info "请确保 Windsurf 已安装在 /Applications 目录"
-        return 1
+        return 0
     fi
     
     echo ""
