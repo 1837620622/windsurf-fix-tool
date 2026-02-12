@@ -37,6 +37,7 @@
 | macOS | `fix-windsurf-mac.sh` | `./fix-windsurf-mac.sh` |
 | Linux | `fix-windsurf-linux.sh` | `./fix-windsurf-linux.sh` |
 | Windows | `fix-windsurf-win.ps1` | PowerShell 管理员模式运行 |
+| macOS 系统清理 | `macos-safe-cleanup.sh` | `./macos-safe-cleanup.sh` |
 
 ## 🚀 快速开始
 
@@ -65,6 +66,15 @@ git clone https://github.com/1837620622/windsurf-fix-tool.git
 cd windsurf-fix-tool
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\fix-windsurf-win.ps1
+```
+
+### macOS 系统清理
+
+```bash
+git clone https://github.com/1837620622/windsurf-fix-tool.git
+cd windsurf-fix-tool
+chmod +x macos-safe-cleanup.sh
+./macos-safe-cleanup.sh
 ```
 
 ## ⚠️ 重要说明
@@ -303,6 +313,37 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedExtensions
 - 应用容器占用排名（macOS）
 - AppData 目录占用（Windows）
 
+### 15. macOS 系统数据清理
+
+**专用脚本:** `macos-safe-cleanup.sh`
+
+**功能特点:**
+- **19项清理功能**，分4个安全等级（低/中/开发/系统级）
+- **每步确认提示**，可随时跳过，确保安全
+- **预估释放10-15GB空间**，针对macOS系统数据优化
+- **不会删除**：应用程序、聊天记录、文档、邮件、配置文件
+
+**主要清理项目:**
+- 微信缓存（6.9GB）→ 建议在微信设置中清理
+- 系统诊断日志（2.7GB）→ 纯日志，安全删除
+- 照片分析缓存（3.1GB）→ 删除后系统自动重建
+- Windsurf WebStorage（1GB）→ 缓存数据
+- Telegram 缓存（1.3GB）→ 建议在Telegram设置中清理
+- Homebrew、npm、Maven 等开发工具缓存
+- 用户缓存目录、临时文件、DNS缓存
+
+**使用方法:**
+```bash
+chmod +x macos-safe-cleanup.sh
+./macos-safe-cleanup.sh
+```
+
+**安全等级说明:**
+- **低风险**: 纯缓存，删除后系统自动重建
+- **中等风险**: 应用缓存，建议先关闭对应应用
+- **开发工具**: node_modules、__pycache__等，需要时重新安装
+- **系统级**: 需要sudo权限，清理系统日志和临时文件
+
 ## 网络白名单
 
 如果你使用防火墙、VPN或代理，请将以下域名加入白名单：
@@ -331,6 +372,14 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedExtensions
 cd windsurf-fix-tool
 chmod +x fix-windsurf-mac.sh
 ./fix-windsurf-mac.sh
+```
+
+### macOS 系统清理
+
+```bash
+cd windsurf-fix-tool
+chmod +x macos-safe-cleanup.sh
+./macos-safe-cleanup.sh
 ```
 
 ### Linux

@@ -37,6 +37,7 @@
 | macOS | `fix-windsurf-mac.sh` | `./fix-windsurf-mac.sh` |
 | Linux | `fix-windsurf-linux.sh` | `./fix-windsurf-linux.sh` |
 | Windows | `fix-windsurf-win.ps1` | Run in PowerShell (Admin) |
+| macOS System Cleanup | `macos-safe-cleanup.sh` | `./macos-safe-cleanup.sh` |
 
 ## 🚀 Quick Start
 
@@ -65,6 +66,15 @@ git clone https://github.com/1837620622/windsurf-fix-tool.git
 cd windsurf-fix-tool
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\fix-windsurf-win.ps1
+```
+
+### macOS System Cleanup
+
+```bash
+git clone https://github.com/1837620622/windsurf-fix-tool.git
+cd windsurf-fix-tool
+chmod +x macos-safe-cleanup.sh
+./macos-safe-cleanup.sh
 ```
 
 ## 📋 Common Issues & Solutions
@@ -149,6 +159,37 @@ Run the tool and select "Clean Dev Tool Caches" - supports batch cleanup or item
 ### 9. Disk Usage Analysis
 
 Analyze disk space usage including directory sizes, hidden folder rankings, Library subdirectory rankings (macOS), AppData directory usage (Windows), and app container usage (macOS).
+
+### 10. macOS System Data Cleanup
+
+**Dedicated Script:** `macos-safe-cleanup.sh`
+
+**Features:**
+- **19 cleanup functions** across 4 safety levels (Low/Medium/Dev/System)
+- **Step-by-step confirmation** prompts, skip anytime for safety
+- **Estimated 10-15GB space recovery** optimized for macOS system data
+- **Won't delete:** Applications, chat history, documents, emails, config files
+
+**Major Cleanup Items:**
+- WeChat cache (6.9GB) → Clean in WeChat Settings recommended
+- System diagnostic logs (2.7GB) → Pure logs, safe to delete
+- Photo analysis cache (3.1GB) → System auto-rebuilds after deletion
+- Windsurf WebStorage (1GB) → Cache data
+- Telegram cache (1.3GB) → Clean in Telegram Settings recommended
+- Homebrew, npm, Maven dev tool caches
+- User cache directories, temp files, DNS cache
+
+**Usage:**
+```bash
+chmod +x macos-safe-cleanup.sh
+./macos-safe-cleanup.sh
+```
+
+**Safety Levels:**
+- **Low Risk:** Pure caches, system auto-rebuilds
+- **Medium Risk:** App caches, close apps first recommended
+- **Dev Tools:** node_modules, __pycache__, reinstall when needed
+- **System Level:** Requires sudo, cleans system logs and temp files
 
 ## 🌐 Network Whitelist
 
