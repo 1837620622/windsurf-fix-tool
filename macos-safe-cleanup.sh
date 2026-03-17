@@ -423,17 +423,24 @@ if [ -d "/private/var/log" ]; then
 fi
 echo ""
 
-# 19. 临时文件夹
+# 19. 临时文件夹（已排除 ask-continue-ports）
 print_info "19. 系统临时文件 (/private/var/folders)"
 if [ -d "/private/var/folders" ]; then
     size=$(du -sk /private/var/folders 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统临时文件${NC}: $(format_size $size)"
     print_warning "  只清理超过7天的临时文件"
+    print_warning "  [安全] 已排除 ask-continue-ports 相关文件"
     if confirm "  清理旧临时文件（需要 sudo）？"; then
+        # 先查找所有 C 目录，然后清理时排除包含 ask-continue-ports 的路径
         sudo find /private/var/folders -name "C" -type d -mindepth 3 -maxdepth 3 2>/dev/null | while read d; do
-            sudo find "$d" -mtime +7 -delete 2>/dev/null
+            # 只删除超过7天的文件，但跳过 ask-continue-ports
+            sudo find "$d" -mtime +7 ! -path "*ask-continue-ports*" -delete 2>/dev/null
         done
-        print_success "  已清理7天以上的临时文件"
+        # 额外确保 /private/tmp/ask-continue-ports 不被误删（显式保护）
+        if [ -e "/private/tmp/ask-continue-ports" ]; then
+            print_info "  已保护 /private/tmp/ask-continue-ports"
+        fi
+        print_success "  已清理7天以上的临时文件（ask-continue-ports 已保留）"
     else
         print_info "  已跳过"
     fi

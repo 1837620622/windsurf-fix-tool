@@ -26,6 +26,10 @@ WINDSURF_DIR="$CODEIUM_DIR/windsurf"
 CASCADE_DIR="$WINDSURF_DIR/cascade"
 WINDSURF_APP="/Applications/Windsurf.app"
 BACKUP_DIR="$HOME/.windsurf-backup-$(date +%Y%m%d_%H%M%S)"
+WINDSURF_SUPPORT_DIR="$HOME/Library/Application Support/Windsurf"
+IMPLICIT_DIR="$WINDSURF_DIR/implicit"
+MACOS_WS_CACHE="$HOME/Library/Caches/com.exafunction.windsurf"
+MACOS_WS_SHIPIT="$HOME/Library/Caches/com.exafunction.windsurf.ShipIt"
 
 # ----------------------------------------------------------------------------
 # 工具函数
@@ -383,6 +387,68 @@ generate_diagnostic_report() {
         echo "## 磁盘空间"
         df -h / 2>/dev/null | head -2
         echo ""
+
+        echo "## Windsurf 关键数据库大小"
+        STATE_DB="$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb"
+        STATE_DB_BACKUP="$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup"
+        if [ -f "$STATE_DB" ]; then
+            echo "state.vscdb:"
+            du -sh "$STATE_DB" 2>/dev/null
+        else
+            echo "state.vscdb: 文件不存在"
+        fi
+        if [ -f "$STATE_DB_BACKUP" ]; then
+            echo "state.vscdb.backup:"
+            du -sh "$STATE_DB_BACKUP" 2>/dev/null
+        else
+            echo "state.vscdb.backup: 文件不存在"
+        fi
+        echo ""
+
+        echo "## Windsurf implicit 索引缓存"
+        if [ -d "$IMPLICIT_DIR" ]; then
+            du -sh "$IMPLICIT_DIR" 2>/dev/null || echo "无法计算 implicit 目录大小"
+        else
+            echo "implicit 目录不存在: $IMPLICIT_DIR"
+        fi
+        echo ""
+
+        echo "## /tmp 终端快照"
+        SNAPSHOT_COUNT=$(ls /tmp/windsurf-terminal-*.snapshot 2>/dev/null | wc -l | tr -d ' ')
+        echo "windsurf-terminal-*.snapshot 数量: $SNAPSHOT_COUNT"
+        echo ""
+
+        echo "## Windsurf 进程信息"
+        WS_PROCESS_INFO=$(ps aux | grep -i "[w]indsurf" | grep -v "fix-windsurf-mac.sh")
+        if [ -n "$WS_PROCESS_INFO" ]; then
+            echo "$WS_PROCESS_INFO"
+        else
+            echo "未检测到 Windsurf 相关进程"
+        fi
+        echo ""
+
+        echo "## Windsurf 缓存目录详细大小"
+        for cache_dir in \
+            "$WINDSURF_SUPPORT_DIR/Cache/Cache_Data" \
+            "$WINDSURF_SUPPORT_DIR/CachedData" \
+            "$WINDSURF_SUPPORT_DIR/GPUCache" \
+            "$WINDSURF_SUPPORT_DIR/Code Cache" \
+            "$WINDSURF_SUPPORT_DIR/logs" \
+            "$WINDSURF_SUPPORT_DIR/Crashpad/completed" \
+            "$WINDSURF_SUPPORT_DIR/Crashpad/pending" \
+            "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage" \
+            "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache" \
+            "$MACOS_WS_CACHE" \
+            "$MACOS_WS_SHIPIT"
+        do
+            if [ -e "$cache_dir" ]; then
+                echo "$cache_dir"
+                du -sh "$cache_dir" 2>/dev/null || echo "无法计算大小"
+            else
+                echo "$cache_dir (不存在)"
+            fi
+        done
+        echo ""
         
     } > "$REPORT_FILE"
     
@@ -401,6 +467,7 @@ full_repair() {
         clean_cascade_cache
         clean_extension_cache
         clean_startup_cache
+        deep_clean_runtime_cache
         fix_damaged_app
         configure_terminal_settings
         detect_zsh_theme_conflicts
@@ -412,6 +479,262 @@ full_repair() {
     else
         print_info "已取消操作"
     fi
+}
+
+# ----------------------------------------------------------------------------
+# 格式化KB大小
+# ----------------------------------------------------------------------------
+format_kb_size() {
+    KB_VALUE="$1"
+    
+    if [ "$KB_VALUE" -ge 1048576 ] 2>/dev/null; then
+        awk -v kb="$KB_VALUE" 'BEGIN {printf "%.2fGB", kb/1024/1024}'
+    elif [ "$KB_VALUE" -ge 1024 ] 2>/dev/null; then
+        awk -v kb="$KB_VALUE" 'BEGIN {printf "%.2fMB", kb/1024}'
+    else
+        echo "${KB_VALUE}KB"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 计算glob路径总大小（KB）
+# ----------------------------------------------------------------------------
+calculate_glob_size_kb() {
+    GLOB_PATTERN="$1"
+    TOTAL_KB=$(compgen -G "$GLOB_PATTERN" | while IFS= read -r item; do
+        du -sk "$item" 2>/dev/null | awk '{print $1}'
+    done | awk '{sum+=$1} END{print sum+0}')
+    echo "${TOTAL_KB:-0}"
+}
+
+# ----------------------------------------------------------------------------
+# 清理glob路径并统计释放空间
+# ----------------------------------------------------------------------------
+clean_glob_with_stats() {
+    TARGET_PATTERN="$1"
+    TARGET_LABEL="$2"
+    
+    BEFORE_KB=$(calculate_glob_size_kb "$TARGET_PATTERN")
+    echo ""
+    print_info "$TARGET_LABEL"
+    
+    if [ "$BEFORE_KB" -gt 0 ] 2>/dev/null; then
+        print_info "清理前大小: $(format_kb_size "$BEFORE_KB")"
+        compgen -G "$TARGET_PATTERN" | while IFS= read -r item; do
+            du -sh "$item" 2>/dev/null | sed 's/^/  /'
+        done
+        
+        compgen -G "$TARGET_PATTERN" | while IFS= read -r item; do
+            rm -rf "$item" 2>/dev/null || true
+        done
+        
+        AFTER_KB=$(calculate_glob_size_kb "$TARGET_PATTERN")
+        RELEASED_KB=$((BEFORE_KB - AFTER_KB))
+        if [ "$RELEASED_KB" -lt 0 ]; then
+            RELEASED_KB=0
+        fi
+        
+        TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
+        print_success "已释放: $(format_kb_size "$RELEASED_KB")"
+    else
+        print_info "清理前大小: 0KB"
+        print_info "无需清理"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 清理单个文件并统计释放空间
+# ----------------------------------------------------------------------------
+clean_file_with_stats() {
+    TARGET_FILE="$1"
+    TARGET_LABEL="$2"
+    
+    echo ""
+    print_info "$TARGET_LABEL"
+    
+    if [ -f "$TARGET_FILE" ]; then
+        BEFORE_KB=$(du -sk "$TARGET_FILE" 2>/dev/null | awk '{print $1}')
+        BEFORE_KB=${BEFORE_KB:-0}
+        print_info "清理前大小: $(format_kb_size "$BEFORE_KB")"
+        du -sh "$TARGET_FILE" 2>/dev/null | sed 's/^/  /'
+        
+        rm -f "$TARGET_FILE" 2>/dev/null || true
+        
+        AFTER_KB=0
+        if [ -f "$TARGET_FILE" ]; then
+            AFTER_KB=$(du -sk "$TARGET_FILE" 2>/dev/null | awk '{print $1}')
+            AFTER_KB=${AFTER_KB:-0}
+        fi
+        
+        RELEASED_KB=$((BEFORE_KB - AFTER_KB))
+        if [ "$RELEASED_KB" -lt 0 ]; then
+            RELEASED_KB=0
+        fi
+        
+        TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
+        print_success "已释放: $(format_kb_size "$RELEASED_KB")"
+    else
+        print_info "清理前大小: 0KB"
+        print_info "文件不存在，无需清理"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 计算可优化运行时缓存总大小（KB）
+# ----------------------------------------------------------------------------
+calculate_runtime_cache_total_kb() {
+    TOTAL_KB=0
+    
+    for pattern in \
+        "$WINDSURF_SUPPORT_DIR/Cache/Cache_Data/*" \
+        "$WINDSURF_SUPPORT_DIR/CachedData/*" \
+        "$WINDSURF_SUPPORT_DIR/GPUCache/*" \
+        "$WINDSURF_SUPPORT_DIR/Code Cache/*" \
+        "$WINDSURF_SUPPORT_DIR/logs/*" \
+        "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" \
+        "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" \
+        "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*" \
+        "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*" \
+        "$IMPLICIT_DIR/*" \
+        "/tmp/windsurf-terminal-*.snapshot" \
+        "$MACOS_WS_CACHE/*" \
+        "$MACOS_WS_SHIPIT/*"
+    do
+        SIZE_KB=$(calculate_glob_size_kb "$pattern")
+        TOTAL_KB=$((TOTAL_KB + SIZE_KB))
+    done
+    
+    STATE_BACKUP_SIZE=0
+    if [ -f "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" ]; then
+        STATE_BACKUP_SIZE=$(du -sk "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" 2>/dev/null | awk '{print $1}')
+        STATE_BACKUP_SIZE=${STATE_BACKUP_SIZE:-0}
+    fi
+    TOTAL_KB=$((TOTAL_KB + STATE_BACKUP_SIZE))
+    
+    echo "$TOTAL_KB"
+}
+
+# ----------------------------------------------------------------------------
+# 功能15: 深度清理运行时缓存（保留对话历史）
+# ----------------------------------------------------------------------------
+deep_clean_runtime_cache() {
+    AUTO_CONFIRM="$1"
+    print_info "深度清理运行时缓存（保留对话历史）..."
+    
+    echo ""
+    echo "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
+    print_success "不会清理对话历史、memories、skills、extensions、用户设置"
+    echo ""
+    
+    if [ "$AUTO_CONFIRM" != "--auto" ]; then
+        if ! confirm_action; then
+            print_info "已取消操作"
+            return 0
+        fi
+    else
+        print_info "已启用自动确认模式"
+    fi
+    
+    check_windsurf_running
+    TOTAL_RELEASED_KB=0
+    
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Cache/Cache_Data/*" "清理浏览器缓存 (Cache/Cache_Data)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedData/*" "清理编译缓存 (CachedData)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/GPUCache/*" "清理 GPU 缓存 (GPUCache)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*" "清理代码缓存 (Code Cache)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*" "清理日志文件 (logs)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" "清理 Crashpad completed"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" "清理 Crashpad pending"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*" "清理 Service Worker CacheStorage"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*" "清理 Service Worker ScriptCache"
+    clean_file_with_stats "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
+    clean_glob_with_stats "$IMPLICIT_DIR/*" "清理 implicit AI 索引缓存"
+    clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot" "清理 /tmp 终端快照"
+    clean_glob_with_stats "$MACOS_WS_CACHE/*" "清理 macOS Windsurf 系统缓存"
+    clean_glob_with_stats "$MACOS_WS_SHIPIT/*" "清理 macOS Windsurf ShipIt 缓存"
+    
+    echo ""
+    print_success "深度清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
+    print_info "已保留对话历史、memories、skills、extensions、用户设置"
+}
+
+# ----------------------------------------------------------------------------
+# 功能16: Windsurf 进程资源监控
+# ----------------------------------------------------------------------------
+monitor_windsurf_processes() {
+    print_info "Windsurf 进程资源监控..."
+    
+    echo ""
+    echo -e "${CYAN}========== Windsurf 进程 ==========${NC}"
+    PROCESS_OUTPUT=$(ps aux | grep -i "[w]indsurf" | grep -v "fix-windsurf-mac.sh")
+    
+    if [ -n "$PROCESS_OUTPUT" ]; then
+        printf "%-8s %-8s %-8s %s\n" "PID" "CPU%" "MEM%" "命令"
+        echo "$PROCESS_OUTPUT" | awk '{
+            cmd=""
+            for(i=11;i<=NF;i++) cmd=cmd $i " "
+            printf "%-8s %-8s %-8s %s\n", $2, $3, $4, cmd
+        }'
+    else
+        print_warning "未检测到 Windsurf 正在运行"
+    fi
+    
+    echo ""
+    echo -e "${CYAN}========== 系统内存概况 ==========${NC}"
+    VM_OUTPUT=$(vm_stat)
+    PAGE_SIZE=$(echo "$VM_OUTPUT" | head -1 | awk '{print $8}' | tr -d '.')
+    
+    PAGES_FREE=$(echo "$VM_OUTPUT" | awk '/Pages free/ {gsub("\.","",$3); print $3}')
+    PAGES_ACTIVE=$(echo "$VM_OUTPUT" | awk '/Pages active/ {gsub("\.","",$3); print $3}')
+    PAGES_INACTIVE=$(echo "$VM_OUTPUT" | awk '/Pages inactive/ {gsub("\.","",$3); print $3}')
+    PAGES_SPECULATIVE=$(echo "$VM_OUTPUT" | awk '/Pages speculative/ {gsub("\.","",$3); print $3}')
+    PAGES_WIRED=$(echo "$VM_OUTPUT" | awk '/Pages wired down/ {gsub("\.","",$4); print $4}')
+    PAGES_COMPRESSED=$(echo "$VM_OUTPUT" | awk '/Pages occupied by compressor/ {gsub("\.","",$5); print $5}')
+    
+    FREE_MB=$(awk -v p="${PAGES_FREE:-0}" -v s="${PAGE_SIZE:-4096}" 'BEGIN {printf "%.2f", p*s/1024/1024}')
+    ACTIVE_MB=$(awk -v p="${PAGES_ACTIVE:-0}" -v s="${PAGE_SIZE:-4096}" 'BEGIN {printf "%.2f", p*s/1024/1024}')
+    INACTIVE_MB=$(awk -v p="${PAGES_INACTIVE:-0}" -v s="${PAGE_SIZE:-4096}" 'BEGIN {printf "%.2f", p*s/1024/1024}')
+    SPECULATIVE_MB=$(awk -v p="${PAGES_SPECULATIVE:-0}" -v s="${PAGE_SIZE:-4096}" 'BEGIN {printf "%.2f", p*s/1024/1024}')
+    WIRED_MB=$(awk -v p="${PAGES_WIRED:-0}" -v s="${PAGE_SIZE:-4096}" 'BEGIN {printf "%.2f", p*s/1024/1024}')
+    COMPRESSED_MB=$(awk -v p="${PAGES_COMPRESSED:-0}" -v s="${PAGE_SIZE:-4096}" 'BEGIN {printf "%.2f", p*s/1024/1024}')
+    
+    echo "  空闲内存: ${FREE_MB}MB"
+    echo "  活跃内存: ${ACTIVE_MB}MB"
+    echo "  非活跃内存: ${INACTIVE_MB}MB"
+    echo "  推测内存: ${SPECULATIVE_MB}MB"
+    echo "  Wired 内存: ${WIRED_MB}MB"
+    echo "  压缩内存: ${COMPRESSED_MB}MB"
+    
+    echo ""
+    echo -e "${CYAN}========== 磁盘空间 ==========${NC}"
+    df -h / 2>/dev/null | head -2
+}
+
+# ----------------------------------------------------------------------------
+# 功能17: 一键智能优化（不清理对话历史）
+# ----------------------------------------------------------------------------
+smart_optimize() {
+    print_info "执行一键智能优化（保留对话历史）..."
+    print_success "不会清理 cascade/memories/skills/extensions"
+    
+    BEFORE_TOTAL_KB=$(calculate_runtime_cache_total_kb)
+    print_info "优化前可清理空间: $(format_kb_size "$BEFORE_TOTAL_KB")"
+    
+    deep_clean_runtime_cache --auto
+    
+    AFTER_TOTAL_KB=$(calculate_runtime_cache_total_kb)
+    OPTIMIZED_KB=$((BEFORE_TOTAL_KB - AFTER_TOTAL_KB))
+    if [ "$OPTIMIZED_KB" -lt 0 ]; then
+        OPTIMIZED_KB=0
+    fi
+    
+    echo ""
+    echo -e "${CYAN}========== 优化前后对比 ==========${NC}"
+    echo "  优化前可清理空间: $(format_kb_size "$BEFORE_TOTAL_KB")"
+    echo "  优化后可清理空间: $(format_kb_size "$AFTER_TOTAL_KB")"
+    echo "  本次优化释放空间: $(format_kb_size "$OPTIMIZED_KB")"
+    echo ""
+    print_success "一键智能优化完成"
 }
 
 # ----------------------------------------------------------------------------
@@ -1234,9 +1557,14 @@ show_menu() {
     echo "  13) 生成诊断报告"
     echo "  14) 完整修复 (执行所有步骤)"
     echo ""
+    echo -e "${YELLOW}== 深度优化 ==${NC}"
+    echo "  15) 深度清理运行时缓存 (保留对话历史，推荐)"
+    echo "  16) Windsurf 进程资源监控"
+    echo "  17) 一键智能优化 (保留对话历史)"
+    echo ""
     echo "  0) 退出"
     echo ""
-    read -p "$(echo -e ${CYAN}请输入选项 [0-14]: ${NC})" choice
+    read -p "$(echo -e ${CYAN}请输入选项 [0-17]: ${NC})" choice
     
     case $choice in
         1) check_windsurf_running; clean_cascade_cache ;;
@@ -1253,6 +1581,9 @@ show_menu() {
         12) fix_damaged_app ;;
         13) generate_diagnostic_report ;;
         14) full_repair ;;
+        15) deep_clean_runtime_cache ;;
+        16) monitor_windsurf_processes ;;
+        17) smart_optimize ;;
         0) 
             echo ""
             print_info "感谢使用 Windsurf 修复工具"
