@@ -605,6 +605,7 @@ calculate_runtime_cache_total_kb() {
         "$IMPLICIT_DIR/*" \
         "$CODE_TRACKER_DIR/*" \
         "/tmp/windsurf-terminal-*.snapshot" \
+        "$HOME/.zcompdump*" \
         "$MACOS_WS_CACHE/*" \
         "$MACOS_WS_SHIPIT/*"
     do
@@ -665,6 +666,7 @@ deep_clean_runtime_cache() {
     clean_glob_with_stats "$IMPLICIT_DIR/*" "清理 implicit AI 索引缓存"
     clean_glob_with_stats "$CODE_TRACKER_DIR/*" "清理 AI 代码追踪索引 (code_tracker)"
     clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot" "清理 /tmp 终端快照"
+    clean_glob_with_stats "$HOME/.zcompdump*" "清理 Zsh 自动补全缓存包浆 (解决终端卡顿)"
     clean_glob_with_stats "$MACOS_WS_CACHE/*" "清理 macOS Windsurf 系统缓存"
     clean_glob_with_stats "$MACOS_WS_SHIPIT/*" "清理 macOS Windsurf ShipIt 缓存"
     
