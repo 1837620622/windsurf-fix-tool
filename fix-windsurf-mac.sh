@@ -28,6 +28,7 @@ WINDSURF_APP="/Applications/Windsurf.app"
 BACKUP_DIR="$HOME/.windsurf-backup-$(date +%Y%m%d_%H%M%S)"
 WINDSURF_SUPPORT_DIR="$HOME/Library/Application Support/Windsurf"
 IMPLICIT_DIR="$WINDSURF_DIR/implicit"
+CODE_TRACKER_DIR="$WINDSURF_DIR/code_tracker"
 MACOS_WS_CACHE="$HOME/Library/Caches/com.exafunction.windsurf"
 MACOS_WS_SHIPIT="$HOME/Library/Caches/com.exafunction.windsurf.ShipIt"
 
@@ -586,16 +587,23 @@ calculate_runtime_cache_total_kb() {
     TOTAL_KB=0
     
     for pattern in \
-        "$WINDSURF_SUPPORT_DIR/Cache/Cache_Data/*" \
+        "$WINDSURF_SUPPORT_DIR/Cache/*" \
         "$WINDSURF_SUPPORT_DIR/CachedData/*" \
         "$WINDSURF_SUPPORT_DIR/GPUCache/*" \
         "$WINDSURF_SUPPORT_DIR/Code Cache/*" \
+        "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*" \
+        "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*" \
+        "$WINDSURF_SUPPORT_DIR/blob_storage/*" \
         "$WINDSURF_SUPPORT_DIR/logs/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" \
         "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*" \
         "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*" \
+        "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*" \
+        "$WINDSURF_SUPPORT_DIR/User/History/*" \
+        "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*" \
         "$IMPLICIT_DIR/*" \
+        "$CODE_TRACKER_DIR/*" \
         "/tmp/windsurf-terminal-*.snapshot" \
         "$MACOS_WS_CACHE/*" \
         "$MACOS_WS_SHIPIT/*"
@@ -638,17 +646,24 @@ deep_clean_runtime_cache() {
     check_windsurf_running
     TOTAL_RELEASED_KB=0
     
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Cache/Cache_Data/*" "清理浏览器缓存 (Cache/Cache_Data)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Cache/*" "清理浏览器缓存 (Cache)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedData/*" "清理编译缓存 (CachedData)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/GPUCache/*" "清理 GPU 缓存 (GPUCache)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*" "清理代码缓存 (Code Cache)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*" "清理 Dawn WebGPU 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*" "清理 Dawn Graphite 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/blob_storage/*" "清理 Blob Storage 缓存"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*" "清理日志文件 (logs)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" "清理 Crashpad completed"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" "清理 Crashpad pending"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*" "清理 Service Worker CacheStorage"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*" "清理 Service Worker ScriptCache"
     clean_file_with_stats "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*" "清理历史工作区索引 (workspaceStorage)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/History/*" "清理本地文件历史备份 (Local History)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*" "清理旧版插件安装包残留"
     clean_glob_with_stats "$IMPLICIT_DIR/*" "清理 implicit AI 索引缓存"
+    clean_glob_with_stats "$CODE_TRACKER_DIR/*" "清理 AI 代码追踪索引 (code_tracker)"
     clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot" "清理 /tmp 终端快照"
     clean_glob_with_stats "$MACOS_WS_CACHE/*" "清理 macOS Windsurf 系统缓存"
     clean_glob_with_stats "$MACOS_WS_SHIPIT/*" "清理 macOS Windsurf ShipIt 缓存"
