@@ -1071,10 +1071,15 @@ function Show-Menu {
     Write-Host "  14) 生成诊断报告"
     Write-Host "  15) 完整修复 (执行所有步骤)"
     Write-Host ""
+    Write-Host "== 深度优化 ==" -ForegroundColor Yellow
+    Write-Host "  16) 深度清理运行时缓存 (保留对话历史，推荐)"
+    Write-Host "  17) Windsurf 进程资源监控"
+    Write-Host "  18) 一键智能优化 (保留对话历史)"
+    Write-Host ""
     Write-Host "  0) 退出"
     Write-Host ""
     
-    $choice = Read-Host "请输入选项 [0-15]"
+    $choice = Read-Host "请输入选项 [0-18]"
     
     switch ($choice) {
         "1" { if (Test-WindsurfRunning) { Clear-CascadeCache } }
@@ -1092,6 +1097,9 @@ function Show-Menu {
         "13" { Clear-TempFiles }
         "14" { New-DiagnosticReport }
         "15" { Start-FullRepair }
+        "16" { Deep-CleanRuntimeCache }
+        "17" { Monitor-WindsurfProcesses }
+        "18" { Smart-Optimize }
         "0" { 
             Write-Host ""
             Write-ColorOutput "感谢使用 Windsurf 修复工具" "Info"

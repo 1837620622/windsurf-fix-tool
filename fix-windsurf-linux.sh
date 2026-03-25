@@ -1143,6 +1143,7 @@ full_repair() {
         clean_cascade_cache
         clean_extension_cache
         clean_startup_cache
+        deep_clean_runtime_cache
         fix_chrome_sandbox
         configure_terminal_settings
         fix_systemd_osc_context
@@ -1188,9 +1189,14 @@ show_menu() {
     echo "  13) 生成诊断报告"
     echo "  14) 完整修复 (执行所有步骤)"
     echo ""
+    echo -e "${YELLOW}== 深度优化 ==${NC}"
+    echo "  15) 深度清理运行时缓存 (保留对话历史，推荐)"
+    echo "  16) Windsurf 进程资源监控"
+    echo "  17) 一键智能优化 (保留对话历史)"
+    echo ""
     echo "  0) 退出"
     echo ""
-    read -p "$(echo -e ${CYAN}请输入选项 [0-14]: ${NC})" choice
+    read -p "$(echo -e ${CYAN}请输入选项 [0-17]: ${NC})" choice
     
     case $choice in
         1) check_windsurf_running; clean_cascade_cache ;;
@@ -1207,6 +1213,9 @@ show_menu() {
         12) detect_shell_theme_conflicts ;;
         13) generate_diagnostic_report ;;
         14) full_repair ;;
+        15) deep_clean_runtime_cache ;;
+        16) monitor_windsurf_processes ;;
+        17) smart_optimize ;;
         0) 
             echo ""
             print_info "感谢使用 Windsurf 修复工具"
