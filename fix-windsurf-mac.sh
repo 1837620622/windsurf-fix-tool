@@ -585,7 +585,7 @@ clean_file_with_stats() {
 # ----------------------------------------------------------------------------
 calculate_runtime_cache_total_kb() {
     TOTAL_KB=0
-    
+
     for pattern in \
         "$WINDSURF_SUPPORT_DIR/Cache/*" \
         "$WINDSURF_SUPPORT_DIR/CachedData/*" \
@@ -594,6 +594,10 @@ calculate_runtime_cache_total_kb() {
         "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*" \
         "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*" \
         "$WINDSURF_SUPPORT_DIR/blob_storage/*" \
+        "$WINDSURF_SUPPORT_DIR/Local Storage/*" \
+        "$WINDSURF_SUPPORT_DIR/Session Storage/*" \
+        "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*" \
+        "$WINDSURF_SUPPORT_DIR/Network/*" \
         "$WINDSURF_SUPPORT_DIR/logs/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" \
@@ -602,6 +606,7 @@ calculate_runtime_cache_total_kb() {
         "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*" \
         "$WINDSURF_SUPPORT_DIR/User/History/*" \
         "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*" \
+        "$WINDSURF_SUPPORT_DIR/CachedProfilesData/*" \
         "$IMPLICIT_DIR/*" \
         "$CODE_TRACKER_DIR/*" \
         "/tmp/windsurf-terminal-*.snapshot" \
@@ -612,14 +617,22 @@ calculate_runtime_cache_total_kb() {
         SIZE_KB=$(calculate_glob_size_kb "$pattern")
         TOTAL_KB=$((TOTAL_KB + SIZE_KB))
     done
-    
+
+    # state.vscdb.backup 单独计算
     STATE_BACKUP_SIZE=0
     if [ -f "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" ]; then
         STATE_BACKUP_SIZE=$(du -sk "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" 2>/dev/null | awk '{print $1}')
         STATE_BACKUP_SIZE=${STATE_BACKUP_SIZE:-0}
     fi
     TOTAL_KB=$((TOTAL_KB + STATE_BACKUP_SIZE))
-    
+
+    # clp 旧版本语言包也纳入统计
+    CLP_DIR="$WINDSURF_SUPPORT_DIR/clp"
+    if [ -d "$CLP_DIR" ]; then
+        CLP_SIZE=$(du -sk "$CLP_DIR" 2>/dev/null | awk '{print $1}')
+        TOTAL_KB=$((TOTAL_KB + ${CLP_SIZE:-0}))
+    fi
+
     echo "$TOTAL_KB"
 }
 
@@ -629,12 +642,12 @@ calculate_runtime_cache_total_kb() {
 deep_clean_runtime_cache() {
     AUTO_CONFIRM="$1"
     print_info "深度清理运行时缓存（保留对话历史）..."
-    
+
     echo ""
     echo "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
-    print_success "不会清理对话历史、memories、skills、extensions、用户设置"
+    print_success "不会清理对话历史（cascade/*.pb）、memories、skills、extensions、用户设置"
     echo ""
-    
+
     if [ "$AUTO_CONFIRM" != "--auto" ]; then
         if ! confirm_action; then
             print_info "已取消操作"
@@ -643,33 +656,105 @@ deep_clean_runtime_cache() {
     else
         print_info "已启用自动确认模式"
     fi
-    
+
     check_windsurf_running
     TOTAL_RELEASED_KB=0
-    
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Cache/*" "清理浏览器缓存 (Cache)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedData/*" "清理编译缓存 (CachedData)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/GPUCache/*" "清理 GPU 缓存 (GPUCache)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*" "清理代码缓存 (Code Cache)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*" "清理 Dawn WebGPU 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*" "清理 Dawn Graphite 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/blob_storage/*" "清理 Blob Storage 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*" "清理日志文件 (logs)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" "清理 Crashpad completed"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" "清理 Crashpad pending"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*" "清理 Service Worker CacheStorage"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*" "清理 Service Worker ScriptCache"
+
+    # ── Electron 内核缓存 ──────────────────────────────────────────────────
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Cache/*"                          "清理浏览器缓存 (Cache)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedData/*"                     "清理编译缓存 (CachedData)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/GPUCache/*"                       "清理 GPU 缓存 (GPUCache)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*"                     "清理代码缓存 (Code Cache)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*"                "清理 Dawn WebGPU 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*"              "清理 Dawn Graphite 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/blob_storage/*"                   "清理 Blob Storage 缓存"
+
+    # ── 网络/存储缓存 ─────────────────────────────────────────────────────
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Local Storage/*"                  "清理 Local Storage 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Session Storage/*"                "清理 Session Storage 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*"              "清理 Shared Dictionary 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Network/*"                        "清理 Network 缓存"
+
+    # ── 日志 / 崩溃报告 ───────────────────────────────────────────────────
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*"                           "清理日志文件 (logs)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*"             "清理 Crashpad completed"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*"               "清理 Crashpad pending"
+
+    # ── Service Worker 缓存 ────────────────────────────────────────────────
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*"    "清理 Service Worker CacheStorage"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*"     "清理 Service Worker ScriptCache"
+
+    # ── 工作区 / 历史 / 插件残留 ───────────────────────────────────────────
     clean_file_with_stats "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*" "清理历史工作区索引 (workspaceStorage)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/History/*" "清理本地文件历史备份 (Local History)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*" "清理旧版插件安装包残留"
-    clean_glob_with_stats "$IMPLICIT_DIR/*" "清理 implicit AI 索引缓存"
-    clean_glob_with_stats "$CODE_TRACKER_DIR/*" "清理 AI 代码追踪索引 (code_tracker)"
-    clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot" "清理 /tmp 终端快照"
-    clean_glob_with_stats "$HOME/.zcompdump*" "清理 Zsh 自动补全缓存包浆 (解决终端卡顿)"
-    clean_glob_with_stats "$MACOS_WS_CACHE/*" "清理 macOS Windsurf 系统缓存"
-    clean_glob_with_stats "$MACOS_WS_SHIPIT/*" "清理 macOS Windsurf ShipIt 缓存"
-    
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*"          "清理历史工作区索引 (workspaceStorage)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/History/*"                   "清理本地文件历史备份 (Local History)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*"           "清理旧版插件安装包残留"
+
+    # ── 语言包缓存（clp 目录，保留最新版） ────────────────────────────────
+    echo ""
+    print_info "清理旧版语言包缓存 (clp)"
+    CLP_DIR="$WINDSURF_SUPPORT_DIR/clp"
+    if [ -d "$CLP_DIR" ]; then
+        BEFORE_KB=$(du -sk "$CLP_DIR" 2>/dev/null | awk '{print $1}')
+        BEFORE_KB=${BEFORE_KB:-0}
+        print_info "清理前大小: $(format_kb_size "$BEFORE_KB")"
+        # 遍历语言包子目录，每个语言只保留最新的版本目录
+        for lang_dir in "$CLP_DIR"/*/; do
+            if [ -d "$lang_dir" ]; then
+                # 按修改时间排序，保留最新一个，删除其余旧版本
+                ls -1td "$lang_dir"*/ 2>/dev/null | tail -n +2 | while IFS= read -r old_ver; do
+                    rm -rf "$old_ver" 2>/dev/null || true
+                done
+            fi
+        done
+        AFTER_KB=$(du -sk "$CLP_DIR" 2>/dev/null | awk '{print $1}')
+        AFTER_KB=${AFTER_KB:-0}
+        RELEASED_KB=$((BEFORE_KB - AFTER_KB))
+        if [ "$RELEASED_KB" -lt 0 ]; then RELEASED_KB=0; fi
+        TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
+        print_success "已释放: $(format_kb_size "$RELEASED_KB")"
+    else
+        print_info "clp 目录不存在，无需清理"
+    fi
+
+    # ── CachedProfilesData 缓存 ────────────────────────────────────────────
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedProfilesData/*"             "清理配置文件缓存 (CachedProfilesData)"
+
+    # ── AI 索引缓存 ────────────────────────────────────────────────────────
+    clean_glob_with_stats "$IMPLICIT_DIR/*"                                        "清理 implicit AI 索引缓存"
+    clean_glob_with_stats "$CODE_TRACKER_DIR/*"                                    "清理 AI 代码追踪索引 (code_tracker)"
+
+    # ── macOS 系统级缓存 ───────────────────────────────────────────────────
+    clean_glob_with_stats "$MACOS_WS_CACHE/*"                                      "清理 macOS Windsurf 系统缓存"
+    clean_glob_with_stats "$MACOS_WS_SHIPIT/*"                                     "清理 macOS Windsurf ShipIt 缓存"
+
+    # ── 临时文件 ──────────────────────────────────────────────────────────
+    clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot"                      "清理 /tmp 终端快照"
+    clean_glob_with_stats "$HOME/.zcompdump*"                                       "清理 Zsh 自动补全缓存（解决终端卡顿）"
+
+    # ── state.vscdb VACUUM 优化（不删除文件，仅压缩SQLite数据库碎片） ──────
+    STATE_DB="$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb"
+    if [ -f "$STATE_DB" ]; then
+        echo ""
+        print_info "优化 state.vscdb 数据库（VACUUM，不删除数据）..."
+        BEFORE_KB=$(du -sk "$STATE_DB" 2>/dev/null | awk '{print $1}')
+        BEFORE_KB=${BEFORE_KB:-0}
+        print_info "优化前大小: $(format_kb_size "$BEFORE_KB")"
+        if command -v sqlite3 &> /dev/null; then
+            sqlite3 "$STATE_DB" "VACUUM;" 2>/dev/null && \
+                print_success "VACUUM 完成" || \
+                print_warning "VACUUM 失败（文件可能被占用）"
+            AFTER_KB=$(du -sk "$STATE_DB" 2>/dev/null | awk '{print $1}')
+            AFTER_KB=${AFTER_KB:-0}
+            RELEASED_KB=$((BEFORE_KB - AFTER_KB))
+            if [ "$RELEASED_KB" -lt 0 ]; then RELEASED_KB=0; fi
+            TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
+            print_success "优化后大小: $(format_kb_size "$AFTER_KB")，释放: $(format_kb_size "$RELEASED_KB")"
+        else
+            print_warning "未找到 sqlite3 命令，跳过 VACUUM 优化"
+        fi
+    fi
+
     echo ""
     print_success "深度清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
     print_info "已保留对话历史、memories、skills、extensions、用户设置"

@@ -1040,6 +1040,285 @@ function Test-NetworkWhitelist {
 }
 
 # ----------------------------------------------------------------------------
+# 格式化KB大小为易读格式
+# ----------------------------------------------------------------------------
+function Format-KbSize {
+    param([long]$KbValue)
+    # 大于1GB时显示GB
+    if ($KbValue -ge 1048576) {
+        return "{0:F2}GB" -f ($KbValue / 1024 / 1024)
+    }
+    # 大于1MB时显示MB
+    elseif ($KbValue -ge 1024) {
+        return "{0:F2}MB" -f ($KbValue / 1024)
+    }
+    else {
+        return "${KbValue}KB"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 获取目录或文件总大小（KB）
+# ----------------------------------------------------------------------------
+function Get-PathSizeKb {
+    param([string]$TargetPath)
+    # 使用 Get-ChildItem 递归统计大小
+    try {
+        $size = (Get-ChildItem -Path $TargetPath -Recurse -ErrorAction SilentlyContinue |
+            Measure-Object -Property Length -Sum).Sum
+        return [long]($size / 1024)
+    }
+    catch {
+        return 0
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 清理路径并输出释放空间统计
+# ----------------------------------------------------------------------------
+function Remove-PathWithStats {
+    param(
+        [string]$TargetPath,
+        [string]$Label
+    )
+
+    Write-Host ""
+    Write-ColorOutput $Label "Info"
+
+    # 统计清理前大小
+    if (Test-Path $TargetPath) {
+        $BeforeKb = Get-PathSizeKb -TargetPath $TargetPath
+        Write-ColorOutput "清理前大小: $(Format-KbSize $BeforeKb)" "Info"
+
+        # 删除目标（目录下所有内容或单个文件）
+        try {
+            if (Test-Path $TargetPath -PathType Container) {
+                Get-ChildItem -Path $TargetPath -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            else {
+                Remove-Item -Path $TargetPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            # 忽略单个文件删除失败，继续执行
+        }
+
+        # 统计清理后大小
+        $AfterKb = 0
+        if (Test-Path $TargetPath) {
+            $AfterKb = Get-PathSizeKb -TargetPath $TargetPath
+        }
+        $ReleasedKb = [long]($BeforeKb - $AfterKb)
+        if ($ReleasedKb -lt 0) { $ReleasedKb = 0 }
+
+        # 累加到全局释放计数
+        $script:TotalReleasedKb += $ReleasedKb
+        Write-ColorOutput "已释放: $(Format-KbSize $ReleasedKb)" "Success"
+    }
+    else {
+        Write-ColorOutput "路径不存在，无需清理" "Info"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 计算当前可清理运行时缓存总大小（KB），用于优化前后对比
+# ----------------------------------------------------------------------------
+function Get-RuntimeCacheTotalKb {
+    $WsAppData = "$env:APPDATA\Windsurf"
+    $ImplicitDir = "$WindsurfDir\implicit"
+    $CodeTrackerDir = "$WindsurfDir\code_tracker"
+    $Total = 0
+
+    # 统计各缓存路径大小
+    $paths = @(
+        "$WsAppData\Cache",
+        "$WsAppData\CachedData",
+        "$WsAppData\GPUCache",
+        "$WsAppData\Code Cache",
+        "$WsAppData\DawnWebGPUCache",
+        "$WsAppData\DawnGraphiteCache",
+        "$WsAppData\blob_storage",
+        "$WsAppData\logs",
+        "$WsAppData\Crashpad\completed",
+        "$WsAppData\Crashpad\pending",
+        "$WsAppData\Service Worker\CacheStorage",
+        "$WsAppData\Service Worker\ScriptCache",
+        "$WsAppData\User\workspaceStorage",
+        "$WsAppData\User\History",
+        "$WsAppData\CachedExtensionVSIXs",
+        $ImplicitDir,
+        $CodeTrackerDir
+    )
+
+    foreach ($p in $paths) {
+        if (Test-Path $p) {
+            $Total += Get-PathSizeKb -TargetPath $p
+        }
+    }
+
+    # state.vscdb.backup 单独计算
+    $StateBackup = "$WsAppData\User\globalStorage\state.vscdb.backup"
+    if (Test-Path $StateBackup) {
+        $Total += Get-PathSizeKb -TargetPath $StateBackup
+    }
+
+    return $Total
+}
+
+# ----------------------------------------------------------------------------
+# 功能16: 深度清理运行时缓存（保留对话历史，解决Windsurf运行卡顿）
+# ----------------------------------------------------------------------------
+function Deep-CleanRuntimeCache {
+    param([switch]$AutoConfirm)
+
+    $WsAppData = "$env:APPDATA\Windsurf"
+    $ImplicitDir = "$WindsurfDir\implicit"
+    $CodeTrackerDir = "$WindsurfDir\code_tracker"
+
+    Write-ColorOutput "深度清理运行时缓存（保留对话历史）..." "Info"
+    Write-Host ""
+    Write-Host "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
+    Write-ColorOutput "不会清理对话历史、memories、skills、extensions、用户设置" "Success"
+    Write-Host ""
+
+    # 判断是否需要手动确认
+    if (-not $AutoConfirm) {
+        if (-not (Confirm-Action)) {
+            Write-ColorOutput "已取消操作" "Info"
+            return
+        }
+    }
+    else {
+        Write-ColorOutput "已启用自动确认模式" "Info"
+    }
+
+    if (-not (Test-WindsurfRunning)) { return }
+
+    # 初始化全局释放空间计数
+    $script:TotalReleasedKb = 0
+
+    # 逐项清理并统计空间
+    Remove-PathWithStats "$WsAppData\Cache"                                      "清理浏览器缓存 (Cache)"
+    Remove-PathWithStats "$WsAppData\CachedData"                                 "清理编译缓存 (CachedData)"
+    Remove-PathWithStats "$WsAppData\GPUCache"                                   "清理 GPU 缓存 (GPUCache)"
+    Remove-PathWithStats "$WsAppData\Code Cache"                                 "清理代码缓存 (Code Cache)"
+    Remove-PathWithStats "$WsAppData\DawnWebGPUCache"                            "清理 Dawn WebGPU 缓存"
+    Remove-PathWithStats "$WsAppData\DawnGraphiteCache"                          "清理 Dawn Graphite 缓存"
+    Remove-PathWithStats "$WsAppData\blob_storage"                               "清理 Blob Storage 缓存"
+    Remove-PathWithStats "$WsAppData\logs"                                       "清理日志文件 (logs)"
+    Remove-PathWithStats "$WsAppData\Crashpad\completed"                         "清理 Crashpad completed"
+    Remove-PathWithStats "$WsAppData\Crashpad\pending"                           "清理 Crashpad pending"
+    Remove-PathWithStats "$WsAppData\Service Worker\CacheStorage"                "清理 Service Worker CacheStorage"
+    Remove-PathWithStats "$WsAppData\Service Worker\ScriptCache"                 "清理 Service Worker ScriptCache"
+    Remove-PathWithStats "$WsAppData\User\globalStorage\state.vscdb.backup"      "清理 state.vscdb.backup（关键大文件）"
+    Remove-PathWithStats "$WsAppData\User\workspaceStorage"                      "清理历史工作区索引 (workspaceStorage)"
+    Remove-PathWithStats "$WsAppData\User\History"                               "清理本地文件历史备份 (Local History)"
+    Remove-PathWithStats "$WsAppData\CachedExtensionVSIXs"                       "清理旧版插件安装包残留"
+    Remove-PathWithStats $ImplicitDir                                             "清理 implicit AI 索引缓存"
+    Remove-PathWithStats $CodeTrackerDir                                          "清理 AI 代码追踪索引 (code_tracker)"
+
+    # 清理 Windows 临时文件夹中的 Windsurf 相关快照
+    Get-ChildItem -Path $env:TEMP -Filter "windsurf-terminal-*.snapshot" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Write-ColorOutput "清理 %TEMP% 中的终端快照" "Info"
+
+    Write-Host ""
+    Write-ColorOutput "深度清理完成，总释放空间: $(Format-KbSize $script:TotalReleasedKb)" "Success"
+    Write-ColorOutput "已保留对话历史、memories、skills、extensions、用户设置" "Info"
+}
+
+# ----------------------------------------------------------------------------
+# 功能17: Windsurf 进程资源监控
+# ----------------------------------------------------------------------------
+function Monitor-WindsurfProcesses {
+    Write-ColorOutput "Windsurf 进程资源监控..." "Info"
+
+    Write-Host ""
+    Write-Host "========== Windsurf 进程 ==========" -ForegroundColor Cyan
+
+    # 查找所有 windsurf 相关进程
+    $processes = Get-Process | Where-Object { $_.Name -like "*windsurf*" } 2>$null
+
+    if ($processes) {
+        Write-Host ("{0,-10} {1,-30} {2,-12} {3,-12}" -f "PID", "进程名", "CPU(s)", "内存(MB)")
+        Write-Host ("-" * 70)
+        foreach ($proc in $processes) {
+            $memMB = [math]::Round($proc.WorkingSet64 / 1MB, 2)
+            # CPU时间取秒数
+            $cpuSec = [math]::Round($proc.CPU, 2)
+            Write-Host ("{0,-10} {1,-30} {2,-12} {3,-12}" -f $proc.Id, $proc.Name, $cpuSec, $memMB)
+        }
+    }
+    else {
+        Write-ColorOutput "未检测到 Windsurf 正在运行" "Warning"
+    }
+
+    Write-Host ""
+    Write-Host "========== 系统内存概况 ==========" -ForegroundColor Cyan
+
+    # 使用 WMI 获取内存信息
+    try {
+        $os = Get-WmiObject -Class Win32_OperatingSystem -ErrorAction SilentlyContinue
+        if ($os) {
+            $totalMB = [math]::Round($os.TotalVisibleMemorySize / 1024, 2)
+            $freeMB  = [math]::Round($os.FreePhysicalMemory / 1024, 2)
+            $usedMB  = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1024, 2)
+            Write-Host "  内存总量: ${totalMB}MB"
+            Write-Host "  已使用:   ${usedMB}MB"
+            Write-Host "  空闲内存: ${freeMB}MB"
+        }
+    }
+    catch {
+        Write-ColorOutput "无法获取内存信息" "Warning"
+    }
+
+    Write-Host ""
+    Write-Host "========== 磁盘空间 ==========" -ForegroundColor Cyan
+    Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -ne $null } |
+        Select-Object Name, @{N="已用(GB)";E={[math]::Round($_.Used/1GB,2)}}, @{N="空闲(GB)";E={[math]::Round($_.Free/1GB,2)}} |
+        Format-Table -AutoSize
+
+    Write-Host ""
+    Write-Host "========== 系统负载 ==========" -ForegroundColor Cyan
+    try {
+        $cpu = (Get-WmiObject -Class Win32_Processor -ErrorAction SilentlyContinue |
+            Measure-Object -Property LoadPercentage -Average).Average
+        Write-Host "  CPU 平均负载: ${cpu}%"
+    }
+    catch {
+        Write-ColorOutput "无法获取 CPU 负载" "Warning"
+    }
+}
+
+# ----------------------------------------------------------------------------
+# 功能18: 一键智能优化（保留对话历史，清理前后空间对比）
+# ----------------------------------------------------------------------------
+function Smart-Optimize {
+    Write-ColorOutput "执行一键智能优化（保留对话历史）..." "Info"
+    Write-ColorOutput "不会清理 cascade/memories/skills/extensions" "Success"
+
+    # 统计优化前可清理空间
+    $BeforeTotalKb = Get-RuntimeCacheTotalKb
+    Write-ColorOutput "优化前可清理空间: $(Format-KbSize $BeforeTotalKb)" "Info"
+
+    # 调用深度清理（自动确认模式，无需手动输入）
+    Deep-CleanRuntimeCache -AutoConfirm
+
+    # 统计优化后残余空间
+    $AfterTotalKb = Get-RuntimeCacheTotalKb
+    $OptimizedKb = $BeforeTotalKb - $AfterTotalKb
+    if ($OptimizedKb -lt 0) { $OptimizedKb = 0 }
+
+    Write-Host ""
+    Write-Host "========== 优化前后对比 ==========" -ForegroundColor Cyan
+    Write-Host "  优化前可清理空间: $(Format-KbSize $BeforeTotalKb)"
+    Write-Host "  优化后可清理空间: $(Format-KbSize $AfterTotalKb)"
+    Write-Host "  本次优化释放空间: $(Format-KbSize $OptimizedKb)"
+    Write-Host ""
+    Write-ColorOutput "一键智能优化完成" "Success"
+}
+
+# ----------------------------------------------------------------------------
 # 主菜单
 # ----------------------------------------------------------------------------
 function Show-Menu {

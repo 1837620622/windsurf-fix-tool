@@ -1159,6 +1159,300 @@ full_repair() {
 }
 
 # ----------------------------------------------------------------------------
+# 格式化KB大小为易读格式
+# ----------------------------------------------------------------------------
+format_kb_size() {
+    KB_VALUE="$1"
+    # 大于1GB时显示GB
+    if [ "$KB_VALUE" -ge 1048576 ] 2>/dev/null; then
+        awk -v kb="$KB_VALUE" 'BEGIN {printf "%.2fGB", kb/1024/1024}'
+    # 大于1MB时显示MB
+    elif [ "$KB_VALUE" -ge 1024 ] 2>/dev/null; then
+        awk -v kb="$KB_VALUE" 'BEGIN {printf "%.2fMB", kb/1024}'
+    else
+        echo "${KB_VALUE}KB"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 计算glob路径下所有文件总大小（返回KB）
+# ----------------------------------------------------------------------------
+calculate_glob_size_kb() {
+    GLOB_PATTERN="$1"
+    # 展开glob并逐项统计大小，最后求和
+    TOTAL_KB=$(compgen -G "$GLOB_PATTERN" 2>/dev/null | while IFS= read -r item; do
+        du -sk "$item" 2>/dev/null | awk '{print $1}'
+    done | awk '{sum+=$1} END{print sum+0}')
+    echo "${TOTAL_KB:-0}"
+}
+
+# ----------------------------------------------------------------------------
+# 清理glob路径并统计释放空间（供功能15调用）
+# ----------------------------------------------------------------------------
+clean_glob_with_stats() {
+    TARGET_PATTERN="$1"
+    TARGET_LABEL="$2"
+
+    # 统计清理前大小
+    BEFORE_KB=$(calculate_glob_size_kb "$TARGET_PATTERN")
+    echo ""
+    print_info "$TARGET_LABEL"
+
+    if [ "$BEFORE_KB" -gt 0 ] 2>/dev/null; then
+        print_info "清理前大小: $(format_kb_size "$BEFORE_KB")"
+        # 先打印各项大小
+        compgen -G "$TARGET_PATTERN" 2>/dev/null | while IFS= read -r item; do
+            du -sh "$item" 2>/dev/null | sed 's/^/  /'
+        done
+        # 执行删除
+        compgen -G "$TARGET_PATTERN" 2>/dev/null | while IFS= read -r item; do
+            rm -rf "$item" 2>/dev/null || true
+        done
+        # 统计释放空间
+        AFTER_KB=$(calculate_glob_size_kb "$TARGET_PATTERN")
+        RELEASED_KB=$((BEFORE_KB - AFTER_KB))
+        if [ "$RELEASED_KB" -lt 0 ]; then
+            RELEASED_KB=0
+        fi
+        # 累加到全局统计变量
+        TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
+        print_success "已释放: $(format_kb_size "$RELEASED_KB")"
+    else
+        print_info "清理前大小: 0KB"
+        print_info "无需清理"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 清理单个文件并统计释放空间（供功能15调用）
+# ----------------------------------------------------------------------------
+clean_file_with_stats() {
+    TARGET_FILE="$1"
+    TARGET_LABEL="$2"
+
+    echo ""
+    print_info "$TARGET_LABEL"
+
+    if [ -f "$TARGET_FILE" ]; then
+        BEFORE_KB=$(du -sk "$TARGET_FILE" 2>/dev/null | awk '{print $1}')
+        BEFORE_KB=${BEFORE_KB:-0}
+        print_info "清理前大小: $(format_kb_size "$BEFORE_KB")"
+        du -sh "$TARGET_FILE" 2>/dev/null | sed 's/^/  /'
+        # 删除文件
+        rm -f "$TARGET_FILE" 2>/dev/null || true
+        # 统计释放空间
+        AFTER_KB=0
+        if [ -f "$TARGET_FILE" ]; then
+            AFTER_KB=$(du -sk "$TARGET_FILE" 2>/dev/null | awk '{print $1}')
+            AFTER_KB=${AFTER_KB:-0}
+        fi
+        RELEASED_KB=$((BEFORE_KB - AFTER_KB))
+        if [ "$RELEASED_KB" -lt 0 ]; then
+            RELEASED_KB=0
+        fi
+        TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
+        print_success "已释放: $(format_kb_size "$RELEASED_KB")"
+    else
+        print_info "文件不存在，无需清理"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 计算当前可清理运行时缓存总大小（KB），用于前后对比
+# ----------------------------------------------------------------------------
+calculate_runtime_cache_total_kb() {
+    # Linux Windsurf 配置目录
+    LINUX_WS_CONFIG="$HOME/.config/Windsurf"
+    TOTAL_KB=0
+
+    for pattern in \
+        "$LINUX_WS_CONFIG/Cache/*" \
+        "$LINUX_WS_CONFIG/CachedData/*" \
+        "$LINUX_WS_CONFIG/GPUCache/*" \
+        "$LINUX_WS_CONFIG/Code Cache/*" \
+        "$LINUX_WS_CONFIG/DawnWebGPUCache/*" \
+        "$LINUX_WS_CONFIG/DawnGraphiteCache/*" \
+        "$LINUX_WS_CONFIG/blob_storage/*" \
+        "$LINUX_WS_CONFIG/logs/*" \
+        "$LINUX_WS_CONFIG/Crashpad/completed/*" \
+        "$LINUX_WS_CONFIG/Crashpad/pending/*" \
+        "$LINUX_WS_CONFIG/Service Worker/CacheStorage/*" \
+        "$LINUX_WS_CONFIG/Service Worker/ScriptCache/*" \
+        "$LINUX_WS_CONFIG/User/workspaceStorage/*" \
+        "$LINUX_WS_CONFIG/User/History/*" \
+        "$LINUX_WS_CONFIG/CachedExtensionVSIXs/*" \
+        "$WINDSURF_DIR/implicit/*" \
+        "$WINDSURF_DIR/code_tracker/*" \
+        "/tmp/windsurf-terminal-*.snapshot"
+    do
+        SIZE_KB=$(calculate_glob_size_kb "$pattern")
+        TOTAL_KB=$((TOTAL_KB + SIZE_KB))
+    done
+
+    # state.vscdb.backup 单独计算
+    STATE_BACKUP="$LINUX_WS_CONFIG/User/globalStorage/state.vscdb.backup"
+    STATE_BACKUP_SIZE=0
+    if [ -f "$STATE_BACKUP" ]; then
+        STATE_BACKUP_SIZE=$(du -sk "$STATE_BACKUP" 2>/dev/null | awk '{print $1}')
+        STATE_BACKUP_SIZE=${STATE_BACKUP_SIZE:-0}
+    fi
+    TOTAL_KB=$((TOTAL_KB + STATE_BACKUP_SIZE))
+
+    echo "$TOTAL_KB"
+}
+
+# ----------------------------------------------------------------------------
+# 功能15: 深度清理运行时缓存（保留对话历史，解决Windsurf运行卡顿）
+# ----------------------------------------------------------------------------
+deep_clean_runtime_cache() {
+    AUTO_CONFIRM="$1"
+    # Linux Windsurf 配置目录
+    LINUX_WS_CONFIG="$HOME/.config/Windsurf"
+    IMPLICIT_LINUX="$WINDSURF_DIR/implicit"
+    CODE_TRACKER_LINUX="$WINDSURF_DIR/code_tracker"
+
+    print_info "深度清理运行时缓存（保留对话历史）..."
+
+    echo ""
+    echo "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
+    print_success "不会清理对话历史、memories、skills、extensions、用户设置"
+    echo ""
+
+    # 判断是否自动确认（被 smart_optimize 调用时）
+    if [ "$AUTO_CONFIRM" != "--auto" ]; then
+        if ! confirm_action; then
+            print_info "已取消操作"
+            return 0
+        fi
+    else
+        print_info "已启用自动确认模式"
+    fi
+
+    check_windsurf_running
+    # 初始化全局释放空间计数器
+    TOTAL_RELEASED_KB=0
+
+    # 逐项清理并统计空间
+    clean_glob_with_stats "$LINUX_WS_CONFIG/Cache/*"                              "清理浏览器缓存 (Cache)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/CachedData/*"                         "清理编译缓存 (CachedData)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/GPUCache/*"                           "清理 GPU 缓存 (GPUCache)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/Code Cache/*"                         "清理代码缓存 (Code Cache)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/DawnWebGPUCache/*"                    "清理 Dawn WebGPU 缓存"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/DawnGraphiteCache/*"                  "清理 Dawn Graphite 缓存"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/blob_storage/*"                       "清理 Blob Storage 缓存"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/logs/*"                               "清理日志文件 (logs)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/Crashpad/completed/*"                 "清理 Crashpad completed"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/Crashpad/pending/*"                   "清理 Crashpad pending"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/Service Worker/CacheStorage/*"        "清理 Service Worker CacheStorage"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/Service Worker/ScriptCache/*"         "清理 Service Worker ScriptCache"
+    clean_file_with_stats "$LINUX_WS_CONFIG/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/User/workspaceStorage/*"              "清理历史工作区索引 (workspaceStorage)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/User/History/*"                       "清理本地文件历史备份 (Local History)"
+    clean_glob_with_stats "$LINUX_WS_CONFIG/CachedExtensionVSIXs/*"               "清理旧版插件安装包残留"
+    clean_glob_with_stats "$IMPLICIT_LINUX/*"                                      "清理 implicit AI 索引缓存"
+    clean_glob_with_stats "$CODE_TRACKER_LINUX/*"                                  "清理 AI 代码追踪索引 (code_tracker)"
+    clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot"                     "清理 /tmp 终端快照"
+
+    # 清理 bash 自动补全缓存（可解决终端卡顿）
+    if compgen -G "$HOME/.bash_completion*" > /dev/null 2>&1; then
+        clean_glob_with_stats "$HOME/.bash_completion*" "清理 Bash 自动补全缓存（解决终端卡顿）"
+    fi
+
+    # 如果是 zsh 环境则同时清理 zcompdump
+    if compgen -G "$HOME/.zcompdump*" > /dev/null 2>&1; then
+        clean_glob_with_stats "$HOME/.zcompdump*" "清理 Zsh 自动补全缓存（解决终端卡顿）"
+    fi
+
+    echo ""
+    print_success "深度清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
+    print_info "已保留对话历史、memories、skills、extensions、用户设置"
+}
+
+# ----------------------------------------------------------------------------
+# 功能16: Windsurf 进程资源监控
+# ----------------------------------------------------------------------------
+monitor_windsurf_processes() {
+    print_info "Windsurf 进程资源监控..."
+
+    echo ""
+    echo -e "${CYAN}========== Windsurf 进程 ==========${NC}"
+
+    # 过滤出 windsurf 相关进程，排除本脚本自身
+    PROCESS_OUTPUT=$(ps aux | grep -i "[w]indsurf" | grep -v "fix-windsurf-linux.sh")
+
+    if [ -n "$PROCESS_OUTPUT" ]; then
+        printf "%-8s %-8s %-8s %s\n" "PID" "CPU%" "MEM%" "命令"
+        echo "$PROCESS_OUTPUT" | awk '{
+            cmd=""
+            for(i=11;i<=NF;i++) cmd=cmd $i " "
+            printf "%-8s %-8s %-8s %s\n", $2, $3, $4, cmd
+        }'
+    else
+        print_warning "未检测到 Windsurf 正在运行"
+    fi
+
+    echo ""
+    echo -e "${CYAN}========== 系统内存概况 ==========${NC}"
+    # 读取 /proc/meminfo 获取内存信息
+    if [ -f /proc/meminfo ]; then
+        MEM_TOTAL=$(awk '/MemTotal/ {printf "%.2f", $2/1024}' /proc/meminfo)
+        MEM_FREE=$(awk '/MemFree/ {printf "%.2f", $2/1024}' /proc/meminfo)
+        MEM_AVAILABLE=$(awk '/MemAvailable/ {printf "%.2f", $2/1024}' /proc/meminfo)
+        MEM_BUFFERS=$(awk '/Buffers/ {printf "%.2f", $2/1024}' /proc/meminfo)
+        MEM_CACHED=$(awk '/^Cached/ {printf "%.2f", $2/1024}' /proc/meminfo)
+        MEM_USED=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf "%.2f", (t-a)/1024}' /proc/meminfo)
+
+        echo "  内存总量:   ${MEM_TOTAL}MB"
+        echo "  已使用:     ${MEM_USED}MB"
+        echo "  空闲内存:   ${MEM_FREE}MB"
+        echo "  可用内存:   ${MEM_AVAILABLE}MB"
+        echo "  Buffers:    ${MEM_BUFFERS}MB"
+        echo "  Cached:     ${MEM_CACHED}MB"
+    else
+        print_warning "无法读取 /proc/meminfo"
+        free -m 2>/dev/null || true
+    fi
+
+    echo ""
+    echo -e "${CYAN}========== 磁盘空间 ==========${NC}"
+    df -h / 2>/dev/null | head -2
+
+    echo ""
+    echo -e "${CYAN}========== 系统负载 ==========${NC}"
+    uptime 2>/dev/null || true
+}
+
+# ----------------------------------------------------------------------------
+# 功能17: 一键智能优化（保留对话历史，清理前后空间对比）
+# ----------------------------------------------------------------------------
+smart_optimize() {
+    print_info "执行一键智能优化（保留对话历史）..."
+    print_success "不会清理 cascade/memories/skills/extensions"
+
+    # 优化前计算可清理空间
+    BEFORE_TOTAL_KB=$(calculate_runtime_cache_total_kb)
+    print_info "优化前可清理空间: $(format_kb_size "$BEFORE_TOTAL_KB")"
+
+    # 调用深度清理（自动确认，无需手动输入）
+    deep_clean_runtime_cache --auto
+
+    # 优化后计算残余空间
+    AFTER_TOTAL_KB=$(calculate_runtime_cache_total_kb)
+    OPTIMIZED_KB=$((BEFORE_TOTAL_KB - AFTER_TOTAL_KB))
+    if [ "$OPTIMIZED_KB" -lt 0 ]; then
+        OPTIMIZED_KB=0
+    fi
+
+    echo ""
+    echo -e "${CYAN}========== 优化前后对比 ==========${NC}"
+    echo "  优化前可清理空间: $(format_kb_size "$BEFORE_TOTAL_KB")"
+    echo "  优化后可清理空间: $(format_kb_size "$AFTER_TOTAL_KB")"
+    echo "  本次优化释放空间: $(format_kb_size "$OPTIMIZED_KB")"
+    echo ""
+    print_success "一键智能优化完成"
+}
+
+# ----------------------------------------------------------------------------
 # 主菜单
 # ----------------------------------------------------------------------------
 show_menu() {
