@@ -49,7 +49,7 @@ echo   1) 清理 Cascade 缓存 (解决启动失败/卡顿)
 echo   2) 清理扩展缓存
 echo   3) 检查 Windsurf 进程
 echo   4) 显示路径信息
-echo   5) 打开 PowerShell 版本工具
+echo   5) 打开 PowerShell 完整版工具（含 AI 工具清理）
 echo.
 echo   0) 退出
 echo.

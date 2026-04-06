@@ -318,19 +318,24 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedExtensions
 **专用脚本:** `macos-safe-cleanup.sh`
 
 **功能特点:**
-- **19项清理功能**，分4个安全等级（低/中/开发/系统级）
+- **26项清理功能**，分5个安全等级（低/中/开发/系统级/AI工具）
 - **每步确认提示**，可随时跳过，确保安全
-- **预估释放10-15GB空间**，针对macOS系统数据优化
+- **自动识别垃圾文件**，不硬编码任何路径，扫描到什么清理什么
 - **不会删除**：应用程序、聊天记录、文档、邮件、配置文件
 
 **主要清理项目:**
-- 微信缓存（6.9GB）→ 建议在微信设置中清理
-- 系统诊断日志（2.7GB）→ 纯日志，安全删除
-- 照片分析缓存（3.1GB）→ 删除后系统自动重建
-- Windsurf WebStorage（1GB）→ 缓存数据
-- Telegram 缓存（1.3GB）→ 建议在Telegram设置中清理
+- 微信缓存 → 自动识别缓存目录、临时文件、文件存储缓存（图片/视频/文件缓存）
+- QQ缓存 → 自动识别缓存目录、临时文件、图片/文件接收/日志缓存
+- Safari浏览器缓存 → 自动识别Safari缓存、WebKit缓存、LocalStorage
+- Xcode派生数据 → 自动识别DerivedData、Archives、模拟器数据
+- iOS/iPadOS备份 → 自动识别MobileSync备份文件
+- 系统诊断日志 → 纯日志，安全删除
+- 照片分析缓存 → 删除后系统自动重建
+- Windsurf WebStorage → 缓存数据
+- Telegram 缓存
 - Homebrew、npm、Maven 等开发工具缓存
 - 用户缓存目录、临时文件、DNS缓存
+- **AI工具深度清理** → Claude Code / OpenAI Codex / Gemini CLI / OpenCode 缓存清理
 
 **使用方法:**
 ```bash
@@ -343,6 +348,36 @@ chmod +x macos-safe-cleanup.sh
 - **中等风险**: 应用缓存，建议先关闭对应应用
 - **开发工具**: node_modules、__pycache__等，需要时重新安装
 - **系统级**: 需要sudo权限，清理系统日志和临时文件
+
+## 🆕 新增功能
+
+### 16. 配置备份与还原（Linux / Windows）
+
+**功能说明:**
+- 备份 MCP 配置、Skills 目录、全局 Rules 和 Memories
+- 支持选择性还原（MCP / Skills / Rules / Memories 单独或全部）
+- 自动扫描所有历史备份，方便管理多个备份版本
+
+**使用方法:** 运行对应平台脚本，选择"备份 MCP 配置 / Skills / 全局 Rules"或"还原 MCP 配置 / Skills / 全局 Rules"
+
+### 17. 重置 Windsurf ID（Linux / Windows）
+
+**功能说明:**
+- 重新生成所有 Windsurf 标识 ID（installation_id、machineid、telemetry ID）
+- 重置后 Windsurf 将被视为全新安装
+- 适用于解决授权问题或 ID 冲突
+
+**使用方法:** 运行对应平台脚本，选择"重置 Windsurf ID (重新生成所有标识)"
+
+### 18. AI 工具深度清理（macOS）
+
+**功能说明:**
+- **Claude Code**: 清理 cache、debug、downloads、paste-cache、plugins/cache、session-data
+- **OpenAI Codex**: 清理 .tmp、tmp、cache、log、plugins/cache、数据库临时文件、模型缓存
+- **Gemini CLI**: 清理 cache、tmp、telemetry.log
+- **OpenCode**: 清理 cache、tool-output、数据库临时文件（shm/wal）
+
+**使用方法:** 运行 `macos-safe-cleanup.sh`，进入第五部分 AI 工具深度清理
 
 ## 网络白名单
 

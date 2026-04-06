@@ -23,6 +23,17 @@ $WindsurfDir = "$CodeiumDir\windsurf"
 $CascadeDir = "$WindsurfDir\cascade"
 $BackupDir = "$env:USERPROFILE\.windsurf-backup-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
 $SettingsJsonPath = "$env:APPDATA\Windsurf\User\settings.json"
+$XdgConfigRoot = if ([string]::IsNullOrWhiteSpace($env:XDG_CONFIG_HOME)) { "$env:USERPROFILE\.config" } else { $env:XDG_CONFIG_HOME }
+$XdgCacheRoot = if ([string]::IsNullOrWhiteSpace($env:XDG_CACHE_HOME)) { "$env:USERPROFILE\.cache" } else { $env:XDG_CACHE_HOME }
+$XdgDataRoot = if ([string]::IsNullOrWhiteSpace($env:XDG_DATA_HOME)) { "$env:USERPROFILE\.local\share" } else { $env:XDG_DATA_HOME }
+$ClaudeCodeDir = if ([string]::IsNullOrWhiteSpace($env:CLAUDE_CONFIG_DIR)) { "$env:USERPROFILE\.claude" } else { $env:CLAUDE_CONFIG_DIR }
+$CodexDir = if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { "$env:USERPROFILE\.codex" } else { $env:CODEX_HOME }
+$GeminiCliHomeRoot = if ([string]::IsNullOrWhiteSpace($env:GEMINI_CLI_HOME)) { $env:USERPROFILE } else { $env:GEMINI_CLI_HOME.TrimEnd([char[]]"\\/") }
+$GeminiCliDir = if ([System.IO.Path]::GetFileName($GeminiCliHomeRoot) -eq ".gemini") { $GeminiCliHomeRoot } else { Join-Path $GeminiCliHomeRoot ".gemini" }
+$OpenCodeInstallDir = "$env:USERPROFILE\.opencode"
+$OpenCodeConfigDir = Join-Path $XdgConfigRoot "opencode"
+$OpenCodeCacheDir = Join-Path $XdgCacheRoot "opencode"
+$OpenCodeDataDir = Join-Path $XdgDataRoot "opencode"
 
 # ----------------------------------------------------------------------------
 # 颜色输出函数
@@ -1121,6 +1132,251 @@ function Remove-PathWithStats {
 }
 
 # ----------------------------------------------------------------------------
+# 显示候选清理项大小
+# ----------------------------------------------------------------------------
+function Show-CleanupCandidate {
+    param(
+        [string]$Label,
+        [string]$TargetPath
+    )
+
+    if (Test-Path $TargetPath) {
+        $sizeKb = Get-PathSizeKb -TargetPath $TargetPath
+        if ($sizeKb -gt 0) {
+            Write-Host "    $Label -> $(Format-KbSize $sizeKb)"
+        }
+        return $sizeKb
+    }
+
+    return 0
+}
+
+# ----------------------------------------------------------------------------
+# 计算四个 AI 工具默认安全清理项总大小（KB）
+# ----------------------------------------------------------------------------
+function Get-AIToolGarbageTotalKb {
+    $total = 0
+
+    $safePaths = @(
+        "$ClaudeCodeDir\cache",
+        "$ClaudeCodeDir\debug",
+        "$ClaudeCodeDir\downloads",
+        "$ClaudeCodeDir\paste-cache",
+        "$ClaudeCodeDir\plugins\cache",
+        "$ClaudeCodeDir\session-data",
+        "$CodexDir\.tmp",
+        "$CodexDir\tmp",
+        "$CodexDir\cache",
+        "$CodexDir\log",
+        "$CodexDir\plugins\cache",
+        "$CodexDir\logs_1.sqlite-shm",
+        "$CodexDir\logs_1.sqlite-wal",
+        "$CodexDir\models_cache.json",
+        "$CodexDir\vendor_imports\skills-curated-cache.json",
+        $OpenCodeCacheDir,
+        "$OpenCodeDataDir\tool-output",
+        "$OpenCodeDataDir\opencode.db-shm",
+        "$OpenCodeDataDir\opencode.db-wal"
+    )
+
+    foreach ($path in $safePaths) {
+        if (Test-Path $path) {
+            $total += Get-PathSizeKb -TargetPath $path
+        }
+    }
+
+    return $total
+}
+
+# ----------------------------------------------------------------------------
+# 计算四个 AI 工具可选深清项总大小（KB）
+# ----------------------------------------------------------------------------
+function Get-AIToolOptionalGarbageTotalKb {
+    $total = 0
+
+    foreach ($path in @("$GeminiCliDir\tmp", "$CodexDir\logs_1.sqlite")) {
+        if (Test-Path $path) {
+            $total += Get-PathSizeKb -TargetPath $path
+        }
+    }
+
+    return $total
+}
+
+# ----------------------------------------------------------------------------
+# 功能19: 清理 Claude Code / codex / gemini-cli / opencode 垃圾缓存
+# ----------------------------------------------------------------------------
+function Clear-AIToolGarbage {
+    Write-ColorOutput "扫描 Claude Code / codex / gemini-cli / opencode 垃圾缓存..." "Info"
+
+    $toolFound = (Test-Path $ClaudeCodeDir) -or
+        (Test-Path $CodexDir) -or
+        (Test-Path $GeminiCliDir) -or
+        (Test-Path $OpenCodeInstallDir) -or
+        (Test-Path $OpenCodeConfigDir) -or
+        (Test-Path $OpenCodeCacheDir) -or
+        (Test-Path $OpenCodeDataDir)
+
+    if (-not $toolFound) {
+        Write-ColorOutput "未检测到四个 AI 工具的本地目录" "Info"
+        return
+    }
+
+    $safeTotalKb = Get-AIToolGarbageTotalKb
+    $geminiTmpKb = if (Test-Path "$GeminiCliDir\tmp") { Get-PathSizeKb -TargetPath "$GeminiCliDir\tmp" } else { 0 }
+    $codexLogDbKb = if (Test-Path "$CodexDir\logs_1.sqlite") { Get-PathSizeKb -TargetPath "$CodexDir\logs_1.sqlite" } else { 0 }
+    $optionalTotalKb = Get-AIToolOptionalGarbageTotalKb
+
+    Write-Host ""
+    Write-ColorOutput "默认只清理缓存、日志、临时文件、工具输出和数据库临时文件" "Success"
+    Write-ColorOutput "不会清理 MCP、登录认证、settings、skills、rules、memories、正式数据库、插件主体和安装目录" "Success"
+    Write-ColorOutput "可选深清项只会影响本地日志或会话恢复能力，不会影响 MCP、登录状态和核心配置" "Warning"
+    Write-Host ""
+    Write-Host "保护范围说明:" -ForegroundColor Cyan
+    Write-Host "  - Claude Code: mcp.json、config.json、settings.json、commands/、projects/、sessions/、history.jsonl"
+    Write-Host "  - codex: config.toml、auth.json、agents/、memories/、rules/、sessions/、history.jsonl、session_index.jsonl"
+    Write-Host "  - gemini-cli: settings.json、oauth_creds.json、skills/、policies/、history/、tmp/chats/"
+    Write-Host "  - opencode: opencode.json、auth.json、opencode.db、storage/session_diff、prompt-history.jsonl、node_modules/"
+    Write-Host ""
+    Write-Host "扫描结果:" -ForegroundColor Cyan
+
+    if (Test-Path $ClaudeCodeDir) {
+        Write-Host ""
+        Write-Host "  [Claude Code] $ClaudeCodeDir" -ForegroundColor Green
+        foreach ($item in @(
+            @{ Label = "cache"; Path = "$ClaudeCodeDir\cache" },
+            @{ Label = "debug"; Path = "$ClaudeCodeDir\debug" },
+            @{ Label = "downloads"; Path = "$ClaudeCodeDir\downloads" },
+            @{ Label = "paste-cache"; Path = "$ClaudeCodeDir\paste-cache" },
+            @{ Label = "plugins\\cache"; Path = "$ClaudeCodeDir\plugins\cache" },
+            @{ Label = "session-data"; Path = "$ClaudeCodeDir\session-data" }
+        )) {
+            [void](Show-CleanupCandidate -Label $item.Label -TargetPath $item.Path)
+        }
+    }
+
+    if (Test-Path $CodexDir) {
+        Write-Host ""
+        Write-Host "  [codex] $CodexDir" -ForegroundColor Green
+        foreach ($item in @(
+            @{ Label = ".tmp"; Path = "$CodexDir\.tmp" },
+            @{ Label = "tmp"; Path = "$CodexDir\tmp" },
+            @{ Label = "cache"; Path = "$CodexDir\cache" },
+            @{ Label = "log"; Path = "$CodexDir\log" },
+            @{ Label = "plugins\\cache"; Path = "$CodexDir\plugins\cache" },
+            @{ Label = "logs_1.sqlite-shm"; Path = "$CodexDir\logs_1.sqlite-shm" },
+            @{ Label = "logs_1.sqlite-wal"; Path = "$CodexDir\logs_1.sqlite-wal" },
+            @{ Label = "models_cache.json"; Path = "$CodexDir\models_cache.json" },
+            @{ Label = "vendor_imports\\skills-curated-cache.json"; Path = "$CodexDir\vendor_imports\skills-curated-cache.json" }
+        )) {
+            [void](Show-CleanupCandidate -Label $item.Label -TargetPath $item.Path)
+        }
+        if ($codexLogDbKb -gt 0) {
+            Write-Host "    logs_1.sqlite（可选深清） -> $(Format-KbSize $codexLogDbKb)"
+        }
+    }
+
+    if (Test-Path $GeminiCliDir) {
+        Write-Host ""
+        Write-Host "  [gemini-cli] $GeminiCliDir" -ForegroundColor Green
+        if ($geminiTmpKb -gt 0) {
+            Write-Host "    tmp（可选深清，会删除本地可恢复会话缓存） -> $(Format-KbSize $geminiTmpKb)"
+        }
+    }
+
+    if ((Test-Path $OpenCodeInstallDir) -or (Test-Path $OpenCodeConfigDir) -or (Test-Path $OpenCodeCacheDir) -or (Test-Path $OpenCodeDataDir)) {
+        Write-Host ""
+        Write-Host "  [opencode]" -ForegroundColor Green
+        if (Test-Path $OpenCodeConfigDir) { Write-Host "    config -> $OpenCodeConfigDir" }
+        if (Test-Path $OpenCodeCacheDir) { Write-Host "    cache -> $OpenCodeCacheDir" }
+        if (Test-Path $OpenCodeDataDir) { Write-Host "    data -> $OpenCodeDataDir" }
+
+        foreach ($item in @(
+            @{ Label = "opencode cache"; Path = $OpenCodeCacheDir },
+            @{ Label = "tool-output"; Path = "$OpenCodeDataDir\tool-output" },
+            @{ Label = "opencode.db-shm"; Path = "$OpenCodeDataDir\opencode.db-shm" },
+            @{ Label = "opencode.db-wal"; Path = "$OpenCodeDataDir\opencode.db-wal" }
+        )) {
+            [void](Show-CleanupCandidate -Label $item.Label -TargetPath $item.Path)
+        }
+    }
+
+    Write-Host ""
+    Write-Host "  默认安全清理预计: $(Format-KbSize $safeTotalKb)" -ForegroundColor Cyan
+    Write-Host "  可选深清额外预计: $(Format-KbSize $optionalTotalKb)" -ForegroundColor Cyan
+    Write-Host ""
+
+    if ($safeTotalKb -le 0 -and $optionalTotalKb -le 0) {
+        Write-ColorOutput "当前没有可安全清理的垃圾缓存" "Info"
+        return
+    }
+
+    $script:TotalReleasedKb = 0
+    $didClean = $false
+
+    if ($safeTotalKb -gt 0) {
+        if (Confirm-Action "确认执行默认安全清理？") {
+            foreach ($item in @(
+                @{ Label = "清理 Claude Code cache"; Path = "$ClaudeCodeDir\cache" },
+                @{ Label = "清理 Claude Code debug"; Path = "$ClaudeCodeDir\debug" },
+                @{ Label = "清理 Claude Code downloads"; Path = "$ClaudeCodeDir\downloads" },
+                @{ Label = "清理 Claude Code paste-cache"; Path = "$ClaudeCodeDir\paste-cache" },
+                @{ Label = "清理 Claude Code 插件缓存"; Path = "$ClaudeCodeDir\plugins\cache" },
+                @{ Label = "清理 Claude Code 临时会话文件"; Path = "$ClaudeCodeDir\session-data" },
+                @{ Label = "清理 codex .tmp"; Path = "$CodexDir\.tmp" },
+                @{ Label = "清理 codex tmp"; Path = "$CodexDir\tmp" },
+                @{ Label = "清理 codex cache"; Path = "$CodexDir\cache" },
+                @{ Label = "清理 codex 日志目录"; Path = "$CodexDir\log" },
+                @{ Label = "清理 codex 插件缓存"; Path = "$CodexDir\plugins\cache" },
+                @{ Label = "清理 codex 日志数据库 shm"; Path = "$CodexDir\logs_1.sqlite-shm" },
+                @{ Label = "清理 codex 日志数据库 wal"; Path = "$CodexDir\logs_1.sqlite-wal" },
+                @{ Label = "清理 codex models_cache.json"; Path = "$CodexDir\models_cache.json" },
+                @{ Label = "清理 codex skills 缓存索引"; Path = "$CodexDir\vendor_imports\skills-curated-cache.json" },
+                @{ Label = "清理 opencode cache"; Path = $OpenCodeCacheDir },
+                @{ Label = "清理 opencode tool-output"; Path = "$OpenCodeDataDir\tool-output" },
+                @{ Label = "清理 opencode.db-shm"; Path = "$OpenCodeDataDir\opencode.db-shm" },
+                @{ Label = "清理 opencode.db-wal"; Path = "$OpenCodeDataDir\opencode.db-wal" }
+            )) {
+                Remove-PathWithStats -TargetPath $item.Path -Label $item.Label
+            }
+            $didClean = $true
+        }
+        else {
+            Write-ColorOutput "已跳过默认安全清理" "Info"
+        }
+    }
+
+    if ($geminiTmpKb -gt 0) {
+        if (Confirm-Action "是否额外清理 gemini-cli tmp？这会删除本地可恢复会话缓存") {
+            Remove-PathWithStats -TargetPath "$GeminiCliDir\tmp" -Label "额外清理 gemini-cli tmp（删除本地可恢复会话缓存）"
+            $didClean = $true
+        }
+        else {
+            Write-ColorOutput "已保留 gemini-cli tmp" "Info"
+        }
+    }
+
+    if ($codexLogDbKb -gt 0) {
+        if (Confirm-Action "是否额外清理 codex logs_1.sqlite？这会清空本地日志数据库") {
+            Remove-PathWithStats -TargetPath "$CodexDir\logs_1.sqlite" -Label "额外清理 codex 日志数据库"
+            $didClean = $true
+        }
+        else {
+            Write-ColorOutput "已保留 codex logs_1.sqlite" "Info"
+        }
+    }
+
+    Write-Host ""
+    if ($didClean) {
+        Write-ColorOutput "四个 AI 工具垃圾缓存清理完成，总释放空间: $(Format-KbSize $script:TotalReleasedKb)" "Success"
+        Write-ColorOutput "核心配置、MCP、登录认证、skills、history 和正式数据库均已保留" "Info"
+    }
+    else {
+        Write-ColorOutput "未执行任何清理操作" "Info"
+    }
+}
+
+# ----------------------------------------------------------------------------
 # 计算当前可清理运行时缓存总大小（KB），用于优化前后对比
 # ----------------------------------------------------------------------------
 function Get-RuntimeCacheTotalKb {
@@ -1319,6 +1575,224 @@ function Smart-Optimize {
 }
 
 # ----------------------------------------------------------------------------
+# 功能20: 备份 MCP 配置、Skills 和全局 Rules
+# ----------------------------------------------------------------------------
+function Backup-McpSkillsRules {
+    Write-ColorOutput "备份 MCP 配置、Skills 和全局 Rules..." "Info"
+
+    $BackupTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $BackupTarget = Join-Path $env:USERPROFILE ".windsurf-config-backup-$BackupTimestamp"
+
+    $McpConfig = Join-Path $WindsurfDir "mcp_config.json"
+    $SkillsDir = Join-Path $WindsurfDir "skills"
+    $GlobalRules = Join-Path $WindsurfDir "memories\global_rules.md"
+    $MemoriesDir = Join-Path $WindsurfDir "memories"
+
+    Write-Host ""
+    Write-Host "将备份以下内容:" -ForegroundColor Cyan
+    Write-Host ""
+
+    $BackupCount = 0
+
+    if (Test-Path $McpConfig) {
+        $McpSize = Get-PathSizeKb -TargetPath $McpConfig
+        Write-Host "  [MCP 配置] $McpConfig - $(Format-KbSize $McpSize)" -ForegroundColor Green
+        $BackupCount++
+    }
+    else { Write-Host "  [MCP 配置] 不存在" -ForegroundColor Red }
+
+    if (Test-Path $SkillsDir) {
+        $SkillsCount = (Get-ChildItem -Directory -Path $SkillsDir -ErrorAction SilentlyContinue).Count
+        $SkillsSize = Get-PathSizeKb -TargetPath $SkillsDir
+        Write-Host "  [Skills] $SkillsDir - $SkillsCount 个技能, $(Format-KbSize $SkillsSize)" -ForegroundColor Green
+        $BackupCount++
+    }
+    else { Write-Host "  [Skills] 目录不存在" -ForegroundColor Red }
+
+    if (Test-Path $GlobalRules) {
+        $RulesSize = Get-PathSizeKb -TargetPath $GlobalRules
+        Write-Host "  [全局 Rules] $GlobalRules - $(Format-KbSize $RulesSize)" -ForegroundColor Green
+        $BackupCount++
+    }
+    else { Write-Host "  [全局 Rules] 不存在" -ForegroundColor Red }
+
+    if (Test-Path $MemoriesDir) {
+        $MemCount = (Get-ChildItem -File -Path $MemoriesDir -Filter "*.pb" -ErrorAction SilentlyContinue).Count
+        $MemSize = Get-PathSizeKb -TargetPath $MemoriesDir
+        Write-Host "  [Memories] $MemoriesDir - $MemCount 个记忆文件, $(Format-KbSize $MemSize)" -ForegroundColor Green
+        $BackupCount++
+    }
+    else { Write-Host "  [Memories] 目录不存在" -ForegroundColor Red }
+
+    Write-Host ""
+    if ($BackupCount -eq 0) { Write-ColorOutput "没有找到任何可备份的内容" "Warning"; return }
+
+    Write-Host "备份目标目录: $BackupTarget" -ForegroundColor Cyan
+    Write-Host ""
+
+    if (Confirm-Action "确认执行备份？") {
+        New-Item -ItemType Directory -Path $BackupTarget -Force | Out-Null
+        if (Test-Path $McpConfig) { Copy-Item $McpConfig (Join-Path $BackupTarget "mcp_config.json") -Force; Write-ColorOutput "MCP 配置已备份" "Success" }
+        if (Test-Path $SkillsDir) { Copy-Item $SkillsDir (Join-Path $BackupTarget "skills") -Recurse -Force; Write-ColorOutput "Skills 目录已备份" "Success" }
+        if (Test-Path $GlobalRules) { New-Item -ItemType Directory -Path (Join-Path $BackupTarget "memories") -Force | Out-Null; Copy-Item $GlobalRules (Join-Path $BackupTarget "memories\global_rules.md") -Force; Write-ColorOutput "全局 Rules 已备份" "Success" }
+        if (Test-Path $MemoriesDir) { Copy-Item $MemoriesDir (Join-Path $BackupTarget "memories") -Recurse -Force -ErrorAction SilentlyContinue; Write-ColorOutput "Memories 目录已备份" "Success" }
+
+        $TotalSize = Get-PathSizeKb -TargetPath $BackupTarget
+        Write-Host ""
+        Write-ColorOutput "备份完成！总大小: $(Format-KbSize $TotalSize)" "Success"
+        Write-ColorOutput "备份位置: $BackupTarget" "Info"
+    }
+    else { Write-ColorOutput "已取消操作" "Info" }
+}
+
+# ----------------------------------------------------------------------------
+# 功能21: 还原 MCP 配置、Skills 和全局 Rules
+# ----------------------------------------------------------------------------
+function Restore-McpSkillsRules {
+    Write-ColorOutput "还原 MCP 配置、Skills 和全局 Rules..." "Info"
+
+    $McpConfig = Join-Path $WindsurfDir "mcp_config.json"
+    $SkillsDir = Join-Path $WindsurfDir "skills"
+    $GlobalRules = Join-Path $WindsurfDir "memories\global_rules.md"
+    $MemoriesDir = Join-Path $WindsurfDir "memories"
+
+    $BackupList = Get-ChildItem -Directory -Path $env:USERPROFILE -Filter ".windsurf-config-backup-*" -ErrorAction SilentlyContinue
+    if (-not $BackupList) { Write-ColorOutput "未找到任何配置备份" "Warning"; Write-ColorOutput "请先使用备份功能进行备份" "Info"; return }
+
+    Write-Host ""
+    Write-Host "可用的配置备份:" -ForegroundColor Cyan
+    Write-Host ""
+
+    $Idx = 1
+    foreach ($bdir in $BackupList) {
+        $Contents = @()
+        if (Test-Path (Join-Path $bdir.FullName "mcp_config.json")) { $Contents += "MCP" }
+        if (Test-Path (Join-Path $bdir.FullName "skills")) { $Contents += "Skills" }
+        if (Test-Path (Join-Path $bdir.FullName "memories\global_rules.md")) { $Contents += "Rules" }
+        if ($Contents.Count -eq 0) { $Contents = @("(空)") }
+        $BSize = Get-PathSizeKb -TargetPath $bdir.FullName
+        Write-Host "  $Idx) $($bdir.Name) - $(Format-KbSize $BSize)" -ForegroundColor Green
+        Write-Host "     包含: $($Contents -join ', ')" -ForegroundColor Cyan
+        $Idx++
+    }
+
+    Write-Host ""
+    Write-Host "  0) 取消"
+    Write-Host ""
+    $RestoreChoice = Read-Host "请选择要还原的备份 [0-$($BackupList.Count)]"
+    if ($RestoreChoice -eq "0" -or [string]::IsNullOrWhiteSpace($RestoreChoice)) { Write-ColorOutput "已取消操作" "Info"; return }
+    if (-not ($RestoreChoice -match '^\d+$') -or [int]$RestoreChoice -lt 1 -or [int]$RestoreChoice -gt $BackupList.Count) { Write-ColorOutput "无效选项" "Error"; return }
+
+    $SelectedBackup = $BackupList[[int]$RestoreChoice - 1]
+    Write-Host ""
+    Write-Host "已选择备份: $($SelectedBackup.Name)" -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "请选择还原方式:" -ForegroundColor Cyan
+    Write-Host "  1) 全部还原  2) 仅MCP  3) 仅Skills  4) 仅Rules  5) 仅Memories  0) 取消"
+    Write-Host ""
+    $RestoreMode = Read-Host "请选择 [0-5]"
+
+    $RestoreMcp = $false; $RestoreSkills = $false; $RestoreRules = $false; $RestoreMem = $false
+    switch ($RestoreMode) {
+        "0" { Write-ColorOutput "已取消操作" "Info"; return }
+        "1" { $RestoreMcp = $true; $RestoreSkills = $true; $RestoreRules = $true; $RestoreMem = $true }
+        "2" { $RestoreMcp = $true }
+        "3" { $RestoreSkills = $true }
+        "4" { $RestoreRules = $true }
+        "5" { $RestoreMem = $true }
+        default { Write-ColorOutput "无效选项" "Error"; return }
+    }
+
+    Write-Host ""
+    Write-ColorOutput "还原操作将覆盖当前配置！" "Warning"
+
+    if (Confirm-Action "确认执行还原？") {
+        Write-Host ""
+        $BackupPath = $SelectedBackup.FullName
+        if ($RestoreMcp -and (Test-Path (Join-Path $BackupPath "mcp_config.json"))) { Copy-Item (Join-Path $BackupPath "mcp_config.json") $McpConfig -Force; Write-ColorOutput "MCP 配置已还原" "Success" }
+        if ($RestoreSkills -and (Test-Path (Join-Path $BackupPath "skills"))) { if (Test-Path $SkillsDir) { Remove-Item $SkillsDir -Recurse -Force -ErrorAction SilentlyContinue }; Copy-Item (Join-Path $BackupPath "skills") $SkillsDir -Recurse -Force; Write-ColorOutput "Skills 目录已还原" "Success" }
+        if ($RestoreRules -and (Test-Path (Join-Path $BackupPath "memories\global_rules.md"))) { if (-not (Test-Path $MemoriesDir)) { New-Item -ItemType Directory -Path $MemoriesDir -Force | Out-Null }; Copy-Item (Join-Path $BackupPath "memories\global_rules.md") $GlobalRules -Force; Write-ColorOutput "全局 Rules 已还原" "Success" }
+        if ($RestoreMem -and (Test-Path (Join-Path $BackupPath "memories"))) { if (-not (Test-Path $MemoriesDir)) { New-Item -ItemType Directory -Path $MemoriesDir -Force | Out-Null }; Copy-Item (Join-Path $BackupPath "memories\*") $MemoriesDir -Recurse -Force -ErrorAction SilentlyContinue; Write-ColorOutput "Memories 已还原" "Success" }
+        Write-Host ""
+        Write-ColorOutput "还原完成！" "Success"
+        Write-ColorOutput "请重启 Windsurf 使更改生效" "Info"
+    }
+    else { Write-ColorOutput "已取消操作" "Info" }
+}
+
+# ----------------------------------------------------------------------------
+# 功能22: 重置 Windsurf ID
+# ----------------------------------------------------------------------------
+function Reset-WindsurfId {
+    Write-ColorOutput "重置 Windsurf ID..." "Info"
+
+    $InstallationIdFile = Join-Path $WindsurfDir "installation_id"
+    $MachineIdFile = Join-Path $env:APPDATA "Windsurf\machineid"
+    $StorageJson = Join-Path $env:APPDATA "Windsurf\User\globalStorage\storage.json"
+
+    Write-Host ""
+    Write-Host "当前 Windsurf ID 信息:" -ForegroundColor Cyan
+    Write-Host ""
+
+    if (Test-Path $InstallationIdFile) { Write-Host "  [installation_id] $(Get-Content $InstallationIdFile -ErrorAction SilentlyContinue)" -ForegroundColor Green }
+    else { Write-Host "  [installation_id] 文件不存在" -ForegroundColor Red }
+    if (Test-Path $MachineIdFile) { Write-Host "  [machineid]       $(Get-Content $MachineIdFile -ErrorAction SilentlyContinue)" -ForegroundColor Green }
+    else { Write-Host "  [machineid]       文件不存在" -ForegroundColor Red }
+    if (Test-Path $StorageJson) { Write-Host "  [storage.json]    存在 (包含 telemetry ID)" -ForegroundColor Green }
+    else { Write-Host "  [storage.json]    文件不存在" -ForegroundColor Red }
+
+    Write-Host ""
+    Write-ColorOutput "此操作将重新生成所有 Windsurf 标识 ID" "Warning"
+    Write-Host "  包括: installation_id, machineid, telemetry ID"
+    Write-Host "  重置后 Windsurf 将被视为全新安装"
+    Write-Host ""
+
+    if (Confirm-Action "确认重置 Windsurf ID？") {
+        if (-not (Test-WindsurfRunning)) { return }
+
+        $NewInstallId = [guid]::NewGuid().ToString()
+        $NewMachineId = [guid]::NewGuid().ToString()
+        $NewDevDeviceId = [guid]::NewGuid().ToString()
+        $NewSqmId = [guid]::NewGuid().ToString().Replace("-", "").ToUpper()
+        $NewMacMachineId = -join ((1..16) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+        $NewTelemetryMachineId = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+
+        Write-Host ""
+        Write-ColorOutput "生成新 ID..." "Info"
+
+        if ((Test-Path $InstallationIdFile) -or (Test-Path (Split-Path $InstallationIdFile))) { $NewInstallId | Out-File $InstallationIdFile -Encoding UTF8 -Force; Write-ColorOutput "installation_id 已重置: $NewInstallId" "Success" }
+        if ((Test-Path $MachineIdFile) -or (Test-Path (Split-Path $MachineIdFile))) { $NewMachineId | Out-File $MachineIdFile -Encoding UTF8 -Force; Write-ColorOutput "machineid 已重置: $NewMachineId" "Success" }
+
+        if (Test-Path $StorageJson) {
+            try {
+                $StorageData = Get-Content $StorageJson -Raw | ConvertFrom-Json
+                $StorageData | Add-Member -NotePropertyName "telemetry.devDeviceId" -NotePropertyValue $NewDevDeviceId -Force
+                $StorageData | Add-Member -NotePropertyName "telemetry.macMachineId" -NotePropertyValue $NewMacMachineId -Force
+                $StorageData | Add-Member -NotePropertyName "telemetry.machineId" -NotePropertyValue $NewTelemetryMachineId -Force
+                $StorageData | Add-Member -NotePropertyName "telemetry.sqmId" -NotePropertyValue $NewSqmId -Force
+                $StorageData | ConvertTo-Json -Depth 10 | Out-File $StorageJson -Encoding UTF8 -Force
+                Write-ColorOutput "storage.json 中的 telemetry ID 已重置" "Success"
+            }
+            catch { Write-ColorOutput "storage.json 处理失败: $_" "Warning" }
+        }
+
+        Write-Host ""
+        Write-Host "重置后的 ID 信息:" -ForegroundColor Cyan
+        Write-Host "  installation_id:        $NewInstallId" -ForegroundColor Green
+        Write-Host "  machineid:              $NewMachineId" -ForegroundColor Green
+        Write-Host "  telemetry.devDeviceId:  $NewDevDeviceId" -ForegroundColor Green
+        Write-Host "  telemetry.macMachineId: $NewMacMachineId" -ForegroundColor Green
+        Write-Host "  telemetry.machineId:    $NewTelemetryMachineId" -ForegroundColor Green
+        Write-Host "  telemetry.sqmId:        $NewSqmId" -ForegroundColor Green
+        Write-Host ""
+        Write-ColorOutput "Windsurf ID 重置完成！" "Success"
+        Write-ColorOutput "请重启 Windsurf 使更改生效" "Info"
+    }
+    else { Write-ColorOutput "已取消操作" "Info" }
+}
+
+# ----------------------------------------------------------------------------
 # 主菜单
 # ----------------------------------------------------------------------------
 function Show-Menu {
@@ -1355,10 +1829,18 @@ function Show-Menu {
     Write-Host "  17) Windsurf 进程资源监控"
     Write-Host "  18) 一键智能优化 (保留对话历史)"
     Write-Host ""
+    Write-Host "== AI 工具清理 ==" -ForegroundColor Yellow
+    Write-Host "  19) 清理 Claude Code / codex / gemini-cli / opencode 垃圾缓存"
+    Write-Host ""
+    Write-Host "== 配置备份与 ID 管理 ==" -ForegroundColor Yellow
+    Write-Host "  20) 备份 MCP 配置 / Skills / 全局 Rules"
+    Write-Host "  21) 还原 MCP 配置 / Skills / 全局 Rules"
+    Write-Host "  22) 重置 Windsurf ID (重新生成所有标识)"
+    Write-Host ""
     Write-Host "  0) 退出"
     Write-Host ""
     
-    $choice = Read-Host "请输入选项 [0-18]"
+    $choice = Read-Host "请输入选项 [0-22]"
     
     switch ($choice) {
         "1" { if (Test-WindsurfRunning) { Clear-CascadeCache } }
@@ -1379,6 +1861,10 @@ function Show-Menu {
         "16" { Deep-CleanRuntimeCache }
         "17" { Monitor-WindsurfProcesses }
         "18" { Smart-Optimize }
+        "19" { Clear-AIToolGarbage }
+        "20" { Backup-McpSkillsRules }
+        "21" { Restore-McpSkillsRules }
+        "22" { Reset-WindsurfId }
         "0" { 
             Write-Host ""
             Write-ColorOutput "感谢使用 Windsurf 修复工具" "Info"
