@@ -13,12 +13,13 @@ title Windsurf 修复工具 - Windows
 setlocal EnableDelayedExpansion
 
 :: 颜色代码设置
-set "GREEN=[92m"
-set "RED=[91m"
-set "YELLOW=[93m"
-set "BLUE=[94m"
-set "CYAN=[96m"
-set "NC=[0m"
+for /F %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+set "GREEN=%ESC%[92m"
+set "RED=%ESC%[91m"
+set "YELLOW=%ESC%[93m"
+set "BLUE=%ESC%[94m"
+set "CYAN=%ESC%[96m"
+set "NC=%ESC%[0m"
 
 :: 路径定义
 set "CODEIUM_DIR=%USERPROFILE%\.codeium"

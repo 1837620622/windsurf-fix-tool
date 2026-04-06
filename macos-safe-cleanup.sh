@@ -50,7 +50,8 @@ format_size() {
 
 # 确认操作
 confirm() {
-    read -p "$(echo -e "${YELLOW}$1 [y/N]: ${NC}")" choice
+    echo -ne "${YELLOW}$1 [y/N]: ${NC}"
+    read -r choice
     case "$choice" in
         y|Y ) return 0;;
         * ) return 1;;
@@ -649,8 +650,17 @@ if [ -d "$CLAUDE_DIR" ]; then
     CLAUDE_PASTE="$CLAUDE_DIR/paste-cache"
     CLAUDE_PLUGINS_CACHE="$CLAUDE_DIR/plugins/cache"
     CLAUDE_SESSION_DATA="$CLAUDE_DIR/session-data"
+    CLAUDE_FILE_HISTORY="$CLAUDE_DIR/file-history"
+    CLAUDE_SHELL_SNAPSHOTS="$CLAUDE_DIR/shell-snapshots"
+    CLAUDE_TASKS="$CLAUDE_DIR/tasks"
+    CLAUDE_TODOS="$CLAUDE_DIR/todos"
+    CLAUDE_SESSION_ENV="$CLAUDE_DIR/session-env"
+    CLAUDE_IDE="$CLAUDE_DIR/ide"
+    CLAUDE_METRICS="$CLAUDE_DIR/metrics"
+    CLAUDE_TELEMETRY="$CLAUDE_DIR/telemetry"
+    CLAUDE_BACKUPS="$CLAUDE_DIR/backups"
 
-    for cache_dir in "$CLAUDE_CACHE" "$CLAUDE_DEBUG" "$CLAUDE_DOWNLOADS" "$CLAUDE_PASTE" "$CLAUDE_PLUGINS_CACHE" "$CLAUDE_SESSION_DATA"; do
+    for cache_dir in "$CLAUDE_CACHE" "$CLAUDE_DEBUG" "$CLAUDE_DOWNLOADS" "$CLAUDE_PASTE" "$CLAUDE_PLUGINS_CACHE" "$CLAUDE_SESSION_DATA" "$CLAUDE_FILE_HISTORY" "$CLAUDE_SHELL_SNAPSHOTS" "$CLAUDE_TASKS" "$CLAUDE_TODOS" "$CLAUDE_SESSION_ENV" "$CLAUDE_IDE" "$CLAUDE_METRICS" "$CLAUDE_TELEMETRY" "$CLAUDE_BACKUPS"; do
         if [ -d "$cache_dir" ]; then
             cache_size=$(get_size_bytes "$cache_dir")
             if [ "$cache_size" -gt 0 ]; then
@@ -767,7 +777,7 @@ OPENCODE_CONFIG="$HOME/.config/opencode"
 OPENCODE_LOG="$HOME/Library/Logs/opencode"
 
 if [ -d "$OPENCODE_CACHE" ] || [ -d "$OPENCODE_DATA" ] || [ -d "$OPENCODE_CONFIG" ] || [ -d "$OPENCODE_LOG" ]; then
-    for cache_dir in "$OPENCODE_CACHE" "$OPENCODE_DATA/tool-output" "$OPENCODE_LOG"; do
+    for cache_dir in "$OPENCODE_CACHE" "$OPENCODE_DATA/tool-output" "$OPENCODE_DATA/log" "$OPENCODE_DATA/snapshot" "$OPENCODE_LOG"; do
         if [ -d "$cache_dir" ]; then
             cache_size=$(get_size_bytes "$cache_dir")
             if [ "$cache_size" -gt 0 ]; then

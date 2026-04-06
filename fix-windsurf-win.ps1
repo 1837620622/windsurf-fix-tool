@@ -1249,7 +1249,15 @@ function Clear-AIToolGarbage {
             @{ Label = "downloads"; Path = "$ClaudeCodeDir\downloads" },
             @{ Label = "paste-cache"; Path = "$ClaudeCodeDir\paste-cache" },
             @{ Label = "plugins\\cache"; Path = "$ClaudeCodeDir\plugins\cache" },
-            @{ Label = "session-data"; Path = "$ClaudeCodeDir\session-data" }
+            @{ Label = "session-data"; Path = "$ClaudeCodeDir\session-data" },
+            @{ Label = "file-history"; Path = "$ClaudeCodeDir\file-history" },
+            @{ Label = "shell-snapshots"; Path = "$ClaudeCodeDir\shell-snapshots" },
+            @{ Label = "tasks"; Path = "$ClaudeCodeDir\tasks" },
+            @{ Label = "todos"; Path = "$ClaudeCodeDir\todos" },
+            @{ Label = "session-env"; Path = "$ClaudeCodeDir\session-env" },
+            @{ Label = "ide"; Path = "$ClaudeCodeDir\ide" },
+            @{ Label = "metrics"; Path = "$ClaudeCodeDir\metrics" },
+            @{ Label = "telemetry"; Path = "$ClaudeCodeDir\telemetry" }
         )) {
             [void](Show-CleanupCandidate -Label $item.Label -TargetPath $item.Path)
         }
@@ -1294,6 +1302,8 @@ function Clear-AIToolGarbage {
         foreach ($item in @(
             @{ Label = "opencode cache"; Path = $OpenCodeCacheDir },
             @{ Label = "tool-output"; Path = "$OpenCodeDataDir\tool-output" },
+            @{ Label = "log"; Path = "$OpenCodeDataDir\log" },
+            @{ Label = "snapshot"; Path = "$OpenCodeDataDir\snapshot" },
             @{ Label = "opencode.db-shm"; Path = "$OpenCodeDataDir\opencode.db-shm" },
             @{ Label = "opencode.db-wal"; Path = "$OpenCodeDataDir\opencode.db-wal" }
         )) {
@@ -1323,6 +1333,14 @@ function Clear-AIToolGarbage {
                 @{ Label = "清理 Claude Code paste-cache"; Path = "$ClaudeCodeDir\paste-cache" },
                 @{ Label = "清理 Claude Code 插件缓存"; Path = "$ClaudeCodeDir\plugins\cache" },
                 @{ Label = "清理 Claude Code 临时会话文件"; Path = "$ClaudeCodeDir\session-data" },
+                @{ Label = "清理 Claude Code 文件编辑历史"; Path = "$ClaudeCodeDir\file-history" },
+                @{ Label = "清理 Claude Code Shell 快照"; Path = "$ClaudeCodeDir\shell-snapshots" },
+                @{ Label = "清理 Claude Code 任务状态"; Path = "$ClaudeCodeDir\tasks" },
+                @{ Label = "清理 Claude Code 待办追踪"; Path = "$ClaudeCodeDir\todos" },
+                @{ Label = "清理 Claude Code 会话环境"; Path = "$ClaudeCodeDir\session-env" },
+                @{ Label = "清理 Claude Code IDE 锁文件"; Path = "$ClaudeCodeDir\ide" },
+                @{ Label = "清理 Claude Code 指标数据"; Path = "$ClaudeCodeDir\metrics" },
+                @{ Label = "清理 Claude Code 遥测数据"; Path = "$ClaudeCodeDir\telemetry" },
                 @{ Label = "清理 codex .tmp"; Path = "$CodexDir\.tmp" },
                 @{ Label = "清理 codex tmp"; Path = "$CodexDir\tmp" },
                 @{ Label = "清理 codex cache"; Path = "$CodexDir\cache" },
@@ -1334,6 +1352,8 @@ function Clear-AIToolGarbage {
                 @{ Label = "清理 codex skills 缓存索引"; Path = "$CodexDir\vendor_imports\skills-curated-cache.json" },
                 @{ Label = "清理 opencode cache"; Path = $OpenCodeCacheDir },
                 @{ Label = "清理 opencode tool-output"; Path = "$OpenCodeDataDir\tool-output" },
+                @{ Label = "清理 opencode log"; Path = "$OpenCodeDataDir\log" },
+                @{ Label = "清理 opencode snapshot"; Path = "$OpenCodeDataDir\snapshot" },
                 @{ Label = "清理 opencode.db-shm"; Path = "$OpenCodeDataDir\opencode.db-shm" },
                 @{ Label = "清理 opencode.db-wal"; Path = "$OpenCodeDataDir\opencode.db-wal" }
             )) {

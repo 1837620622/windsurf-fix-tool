@@ -81,7 +81,8 @@ print_error() {
 }
 
 confirm_action() {
-    read -p "$(echo -e ${YELLOW}确认执行此操作？[y/N]: ${NC})" choice
+    echo -ne ${YELLOW}确认执行此操作？[y/N]: ${NC}
+    read -r choice
     case "$choice" in
         y|Y ) return 0;;
         * ) return 1;;
@@ -119,7 +120,8 @@ check_windsurf_running() {
     if pgrep -x "Windsurf" > /dev/null 2>&1; then
         print_warning "检测到 Windsurf 正在运行"
         echo -e "  请先关闭 Windsurf 再执行修复操作"
-        read -p "$(echo -e ${YELLOW}是否自动关闭Windsurf？[y/N]: ${NC})" choice
+        echo -ne ${YELLOW}是否自动关闭Windsurf？[y/N]: ${NC}
+        read -r choice
         case "$choice" in
             y|Y )
                 pkill -x "Windsurf" 2>/dev/null || true
@@ -288,7 +290,8 @@ detect_zsh_theme_conflicts() {
         echo "  # eval \"\$(oh-my-posh init zsh)\""
         echo ""
         
-        read -p "$(echo -e ${YELLOW}是否创建Windsurf专用的简化zshrc？[y/N]: ${NC})" choice
+        echo -ne ${YELLOW}是否创建Windsurf专用的简化zshrc？[y/N]: ${NC}
+        read -r choice
         case "$choice" in
             y|Y )
                 create_windsurf_zshrc
@@ -964,6 +967,8 @@ clean_ai_tool_garbage() {
             clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/todos"                        "清理 Claude Code 待办追踪"
             clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/session-env"                  "清理 Claude Code 会话环境"
             clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/ide"                          "清理 Claude Code IDE 锁文件"
+            clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/metrics"                      "清理 Claude Code 指标数据"
+            clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/telemetry"                    "清理 Claude Code 遥测数据"
 
             clean_dir_contents_with_stats "$CODEX_DIR/.tmp"                               "清理 codex .tmp"
             clean_dir_contents_with_stats "$CODEX_DIR/tmp"                                "清理 codex tmp"
@@ -987,7 +992,8 @@ clean_ai_tool_garbage() {
     fi
 
     if [ "$GEMINI_TMP_KB" -gt 0 ] 2>/dev/null; then
-        read -p "$(echo -e ${YELLOW}是否额外清理 gemini-cli tmp？这会删除本地可恢复会话缓存 [y/N]: ${NC})" EXTRA_CHOICE
+        echo -ne ${YELLOW}是否额外清理 gemini-cli tmp？这会删除本地可恢复会话缓存 [y/N]: ${NC}
+        read -r EXTRA_CHOICE
         case "$EXTRA_CHOICE" in
             y|Y )
                 clean_dir_contents_with_stats "$GEMINI_CLI_DIR/tmp" "额外清理 gemini-cli tmp（删除本地可恢复会话缓存）"
@@ -1000,7 +1006,8 @@ clean_ai_tool_garbage() {
     fi
 
     if [ "$CODEX_LOG_DB_KB" -gt 0 ] 2>/dev/null; then
-        read -p "$(echo -e ${YELLOW}是否额外清理 codex logs_1.sqlite？这会清空本地日志数据库 [y/N]: ${NC})" EXTRA_CHOICE
+        echo -ne ${YELLOW}是否额外清理 codex logs_1.sqlite？这会清空本地日志数据库 [y/N]: ${NC}
+        read -r EXTRA_CHOICE
         case "$EXTRA_CHOICE" in
             y|Y )
                 clean_file_with_stats "$CODEX_DIR/logs_1.sqlite" "额外清理 codex 日志数据库"
@@ -1014,7 +1021,8 @@ clean_ai_tool_garbage() {
 
     CLAUDE_PLANS_KB=$(calculate_dir_contents_size_kb "$CLAUDE_CODE_DIR/plans")
     if [ "$CLAUDE_PLANS_KB" -gt 0 ] 2>/dev/null; then
-        read -p "$(echo -e ${YELLOW}是否额外清理 Claude Code plans？这会删除本地计划文档 [y/N]: ${NC})" EXTRA_CHOICE
+        echo -ne ${YELLOW}是否额外清理 Claude Code plans？这会删除本地计划文档 [y/N]: ${NC}
+        read -r EXTRA_CHOICE
         case "$EXTRA_CHOICE" in
             y|Y )
                 clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/plans" "额外清理 Claude Code plans（删除本地计划文档）"
@@ -1028,7 +1036,8 @@ clean_ai_tool_garbage() {
 
     CLAUDE_BACKUPS_KB=$(calculate_dir_contents_size_kb "$CLAUDE_CODE_DIR/backups")
     if [ "$CLAUDE_BACKUPS_KB" -gt 0 ] 2>/dev/null; then
-        read -p "$(echo -e ${YELLOW}是否额外清理 Claude Code backups？这会删除配置自动备份 [y/N]: ${NC})" EXTRA_CHOICE
+        echo -ne ${YELLOW}是否额外清理 Claude Code backups？这会删除配置自动备份 [y/N]: ${NC}
+        read -r EXTRA_CHOICE
         case "$EXTRA_CHOICE" in
             y|Y )
                 clean_dir_contents_with_stats "$CLAUDE_CODE_DIR/backups" "额外清理 Claude Code backups（删除配置自动备份）"
@@ -1244,7 +1253,8 @@ restore_mcp_skills_rules() {
     echo ""
     echo "  0) 取消"
     echo ""
-    read -p "$(echo -e ${CYAN}请选择要还原的备份 [0-${#BACKUP_LIST[@]}]: ${NC})" restore_choice
+    echo -ne ${CYAN}请选择要还原的备份 [0-${#BACKUP_LIST[@]}]: ${NC}
+    read -r restore_choice
     
     if [ "$restore_choice" = "0" ] || [ -z "$restore_choice" ]; then
         print_info "已取消操作"
@@ -1310,7 +1320,8 @@ restore_mcp_skills_rules() {
     echo "  5) 仅还原 Memories"
     echo "  0) 取消"
     echo ""
-    read -p "$(echo -e ${CYAN}请选择 [0-5]: ${NC})" restore_mode
+    echo -ne ${CYAN}请选择 [0-5]: ${NC}
+    read -r restore_mode
     
     case "$restore_mode" in
         0)
@@ -2180,7 +2191,8 @@ clean_dev_caches() {
     echo "  2) 逐项选择清理"
     echo "  3) 取消"
     echo ""
-    read -p "$(echo -e ${CYAN}请选择 [1-3]: ${NC})" clean_choice
+    echo -ne ${CYAN}请选择 [1-3]: ${NC}
+    read -r clean_choice
     
     case "$clean_choice" in
         1)
@@ -2298,7 +2310,8 @@ clean_dev_caches() {
                     *) label="$item" ;;
                 esac
                 
-                read -p "$(echo -e ${YELLOW}清理 $label？[y/N]: ${NC})" yn
+                echo -ne ${YELLOW}清理 $label？[y/N]: ${NC}
+                read -r yn
                 if [ "$yn" = "y" ] || [ "$yn" = "Y" ]; then
                     case "$item" in
                         npm)
@@ -2427,7 +2440,8 @@ clean_system_caches() {
     echo "  7) 全部执行（安全项）"
     echo "  0) 取消"
     echo ""
-    read -p "$(echo -e ${CYAN}请选择 [0-7]: ${NC})" sys_choice
+    echo -ne ${CYAN}请选择 [0-7]: ${NC}
+    read -r sys_choice
     
     case "$sys_choice" in
         1)
@@ -2618,7 +2632,8 @@ show_menu() {
     echo ""
     echo "  0) 退出"
     echo ""
-    read -p "$(echo -e ${CYAN}请输入选项 [0-22]: ${NC})" choice
+    echo -ne ${CYAN}请输入选项 [0-22]: ${NC}
+    read -r choice
     
     case $choice in
         1) check_windsurf_running; clean_cascade_cache ;;
@@ -2664,7 +2679,8 @@ main() {
     while true; do
         show_menu
         echo ""
-        read -p "$(echo -e ${CYAN}按回车键继续...${NC})"
+        echo -ne ${CYAN}按回车键继续...${NC}
+        read -r
     done
 }
 
