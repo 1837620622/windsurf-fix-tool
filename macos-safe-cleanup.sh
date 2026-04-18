@@ -1,4 +1,8 @@
 #!/bin/bash
+# 统一 UTF-8 终端环境，降低中文输出在部分终端中的显示异常概率。
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="${LC_ALL:-C.UTF-8}"
+
 # ============================================================================
 # macOS 系统数据安全清理脚本
 # 针对你的系统定制，只清理可安全删除的缓存和临时文件
@@ -14,6 +18,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+SECTION_BAR="--------------------------------------------"
 
 # 统计变量
 TOTAL_FREED=0
@@ -114,9 +119,9 @@ echo ""
 # ============================================================================
 # 第一部分：低风险清理（纯缓存，删除后系统自动重建）
 # ============================================================================
-echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "\n${GREEN}${SECTION_BAR}${NC}"
 echo -e "${GREEN}  第一部分: 低风险清理（纯缓存，系统会自动重建）${NC}"
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "${GREEN}${SECTION_BAR}${NC}\n"
 
 # 1. 用户缓存目录
 print_info "1. 用户应用缓存 (~/Library/Caches)"
@@ -227,9 +232,9 @@ echo ""
 # ============================================================================
 # 第二部分：中等风险清理（应用缓存，不影响核心功能）
 # ============================================================================
-echo -e "\n${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "\n${YELLOW}${SECTION_BAR}${NC}"
 echo -e "${YELLOW}  第二部分: 中等风险清理（应用缓存，建议先关闭对应应用）${NC}"
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "${YELLOW}${SECTION_BAR}${NC}\n"
 
 # 9. 微信缓存
 print_info "9. 微信缓存"
@@ -408,9 +413,31 @@ print_info "13. Google Chrome 缓存"
 CHROME_CACHE="$HOME/Library/Application Support/Google/Chrome/Default/Service Worker"
 CHROME_CACHE2="$HOME/Library/Application Support/Google/Chrome/Default/Cache"
 CHROME_CODE="$HOME/Library/Application Support/Google/Chrome/Default/Code Cache"
+CHROME_COMPONENT="$HOME/Library/Application Support/Google/Chrome/component_crx_cache"
+CHROME_SODA_LANG="$HOME/Library/Application Support/Google/Chrome/SODALanguagePacks"
+CHROME_SODA="$HOME/Library/Application Support/Google/Chrome/SODA"
+CHROME_MODEL="$HOME/Library/Application Support/Google/Chrome/optimization_guide_model_store"
+CHROME_GR_SHADER="$HOME/Library/Application Support/Google/Chrome/GrShaderCache"
+CHROME_GRAPHITE="$HOME/Library/Application Support/Google/Chrome/GraphiteDawnCache"
+CHROME_SHADER="$HOME/Library/Application Support/Google/Chrome/ShaderCache"
+CHROME_BROWSER_METRICS="$HOME/Library/Application Support/Google/Chrome/BrowserMetrics"
+CHROME_SNAPSHOTS="$HOME/Library/Application Support/Google/Chrome/Snapshots"
+CHROME_EXT_CRX="$HOME/Library/Application Support/Google/Chrome/extensions_crx_cache"
+CHROME_CRASHPAD="$HOME/Library/Application Support/Google/Chrome/Crashpad"
 safe_remove_dir "$CHROME_CACHE" "Chrome Service Worker 缓存"
 safe_remove_dir "$CHROME_CACHE2" "Chrome 网页缓存"
 safe_remove_dir "$CHROME_CODE" "Chrome 代码缓存"
+safe_remove_dir "$CHROME_COMPONENT" "Chrome 组件下载缓存"
+safe_remove_dir "$CHROME_SODA_LANG" "Chrome 语音语言包缓存"
+safe_remove_dir "$CHROME_SODA" "Chrome 语音模型缓存"
+safe_remove_dir "$CHROME_MODEL" "Chrome 优化模型缓存"
+safe_remove_dir "$CHROME_GR_SHADER" "Chrome GrShader 缓存"
+safe_remove_dir "$CHROME_GRAPHITE" "Chrome GraphiteDawn 缓存"
+safe_remove_dir "$CHROME_SHADER" "Chrome Shader 缓存"
+safe_remove_dir "$CHROME_BROWSER_METRICS" "Chrome BrowserMetrics 缓存"
+safe_remove_dir "$CHROME_SNAPSHOTS" "Chrome Snapshots 缓存"
+safe_remove_dir "$CHROME_EXT_CRX" "Chrome 扩展安装包缓存"
+safe_remove_dir "$CHROME_CRASHPAD" "Chrome Crashpad 缓存"
 echo ""
 
 # 14. Windsurf 缓存
@@ -434,15 +461,35 @@ if [ -d "$WS_DIR" ]; then
 fi
 echo ""
 
+# 15. Choice 临时与日志缓存
+print_info "15. Choice 临时与日志缓存"
+CHOICE_DIR="$HOME/Library/Application Support/Choice"
+if [ -d "$CHOICE_DIR" ]; then
+    safe_remove_dir "$CHOICE_DIR/temp" "Choice 临时目录"
+    safe_remove_dir "$CHOICE_DIR/logs" "Choice 日志目录"
+    safe_remove_dir "$CHOICE_DIR/crash/Reports" "Choice 崩溃报告"
+    safe_remove_dir "$CHOICE_DIR/crash/Data" "Choice 崩溃数据"
+fi
+echo ""
+
+# 16. MathWorks 日志与本地作业缓存
+print_info "16. MathWorks 日志与本地作业缓存"
+MATHWORKS_DIR="$HOME/Library/Application Support/MathWorks"
+if [ -d "$MATHWORKS_DIR" ]; then
+    safe_remove_dir "$MATHWORKS_DIR/ServiceHost/logs" "MathWorks ServiceHost 日志"
+    safe_remove_dir "$MATHWORKS_DIR/MATLAB/local_cluster_jobs" "MathWorks 本地作业缓存"
+fi
+echo ""
+
 # ============================================================================
 # 第三部分：开发工具清理
 # ============================================================================
-echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "\n${BLUE}${SECTION_BAR}${NC}"
 echo -e "${BLUE}  第三部分: 开发工具清理${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "${BLUE}${SECTION_BAR}${NC}\n"
 
-# 15. Safari 浏览器缓存
-print_info "15. Safari 浏览器缓存"
+# 17. Safari 浏览器缓存
+print_info "17. Safari 浏览器缓存"
 SAFARI_CACHE="$HOME/Library/Caches/com.apple.Safari"
 SAFARI_WEBKIT="$HOME/Library/Caches/com.apple.WebKit.WebContent"
 SAFARI_FS="$HOME/Library/Safari/LocalStorage"
@@ -565,12 +612,12 @@ echo ""
 # ============================================================================
 # 第四部分：系统级清理（需要 sudo）
 # ============================================================================
-echo -e "\n${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "\n${RED}${SECTION_BAR}${NC}"
 echo -e "${RED}  第四部分: 系统级清理（需要管理员密码）${NC}"
-echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "${RED}${SECTION_BAR}${NC}\n"
 
-# 21. 系统诊断日志（2.7GB）
-print_info "21. 系统诊断日志 (/private/var/db/diagnostics)"
+# 23. 系统诊断日志（2.7GB）
+print_info "23. 系统诊断日志 (/private/var/db/diagnostics)"
 if [ -d "/private/var/db/diagnostics" ]; then
     size=$(du -sk /private/var/db/diagnostics 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统诊断日志${NC}: $(format_size $size)"
@@ -589,8 +636,8 @@ if [ -d "/private/var/db/diagnostics" ]; then
 fi
 echo ""
 
-# 22. 系统日志
-print_info "22. 系统日志 (/private/var/log)"
+# 24. 系统日志
+print_info "24. 系统日志 (/private/var/log)"
 if [ -d "/private/var/log" ]; then
     size=$(du -sk /private/var/log 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统日志${NC}: $(format_size $size)"
@@ -606,8 +653,8 @@ if [ -d "/private/var/log" ]; then
 fi
 echo ""
 
-# 23. 临时文件夹（已排除 ask-continue-ports）
-print_info "23. 系统临时文件 (/private/var/folders)"
+# 25. 临时文件夹（已排除 ask-continue-ports）
+print_info "25. 系统临时文件 (/private/var/folders)"
 if [ -d "/private/var/folders" ]; then
     size=$(du -sk /private/var/folders 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统临时文件${NC}: $(format_size $size)"
@@ -631,11 +678,11 @@ fi
 echo ""
 
 # ============================================================================
-# 第五部分：AI 工具深度清理（Claude Code / Codex / Gemini CLI / OpenCode）
+# 第五部分: AI 工具深度清理 (Claude Code / Codex / Gemini CLI / OpenCode)
 # ============================================================================
-echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}  第五部分: AI 工具深度清理${NC}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "\n${CYAN}${SECTION_BAR}${NC}"
+echo -e "${CYAN}  第五部分: AI 工具深度清理 (Claude/Codex/Gemini/OpenCode)${NC}"
+echo -e "${CYAN}${SECTION_BAR}${NC}\n"
 
 # 20. Claude Code 缓存清理
 print_info "20. Claude Code 缓存"
@@ -814,9 +861,9 @@ echo ""
 # ============================================================================
 # 清理完成
 # ============================================================================
-echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "\n${GREEN}${SECTION_BAR}${NC}"
 echo -e "${GREEN}  清理完成！${NC}"
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+echo -e "${GREEN}${SECTION_BAR}${NC}\n"
 
 echo -e "本次清理释放空间: ${GREEN}$(format_size $TOTAL_FREED)${NC}"
 echo ""
