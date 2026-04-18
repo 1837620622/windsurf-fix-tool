@@ -11,7 +11,10 @@
 
 # ----------------------------------------------------------------------------
 # 编码设置
+# 脚本文件采用 UTF-8 with BOM，兼容 Windows PowerShell 5.1 的中文解析。
+# 不使用 GBK/ANSI，避免 GitHub 与跨平台环境再次出现编码不一致。
 # ----------------------------------------------------------------------------
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 

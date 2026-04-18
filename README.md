@@ -68,6 +68,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\fix-windsurf-win.ps1
 ```
 
+**编码说明：** `fix-windsurf-win.ps1` 使用 `UTF-8 with BOM`，用于兼容 Windows PowerShell 5.1 的中文脚本解析；不建议改成 `GBK`，因为那会依赖本机区域设置，容易在 GitHub、VS Code 和跨平台环境里再次出现乱码。
+
 ### macOS 系统清理
 
 ```bash

@@ -68,6 +68,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\fix-windsurf-win.ps1
 ```
 
+**Encoding note:** `fix-windsurf-win.ps1` is stored as `UTF-8 with BOM` for better compatibility with Windows PowerShell 5.1 when Chinese text is present. `GBK` is not recommended because it depends on the local system code page and is less reliable across GitHub, VS Code, and cross-platform environments.
+
 ### macOS System Cleanup
 
 ```bash
