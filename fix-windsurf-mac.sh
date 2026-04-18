@@ -704,9 +704,12 @@ calculate_runtime_cache_total_kb() {
         "$WINDSURF_SUPPORT_DIR/Code Cache/*" \
         "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*" \
         "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*" \
+        "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*" \
         "$WINDSURF_SUPPORT_DIR/logs/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" \
+        "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*" \
+        "$WINDSURF_SUPPORT_DIR/User/History/*" \
         "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*" \
         "$WINDSURF_SUPPORT_DIR/CachedProfilesData/*" \
         "$IMPLICIT_DIR/*" \
@@ -1609,8 +1612,8 @@ deep_clean_runtime_cache() {
     print_info "深度清理运行时缓存（保留对话历史）..."
 
     echo ""
-    echo "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
-    print_success "不会清理对话历史（cascade/*.pb）、登录态相关存储（IndexedDB/WebStorage/Local Storage/Session Storage/Service Worker）、memories、skills、extensions、用户设置"
+    echo "此操作会先执行默认安全深清，再可选继续清理登录态相关存储"
+    print_success "第一阶段不会清理对话历史（cascade/*.pb）、登录态相关存储（IndexedDB/WebStorage/Local Storage/Session Storage/Service Worker/Cookies）、memories、skills、extensions、用户设置"
     echo ""
 
     if [ "$AUTO_CONFIRM" != "--auto" ]; then
@@ -1634,6 +1637,7 @@ deep_clean_runtime_cache() {
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*"                     "清理代码缓存 (Code Cache)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*"                "清理 Dawn WebGPU 缓存"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*"              "清理 Dawn Graphite 缓存"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*"              "清理 Shared Dictionary 缓存"
 
     # ── 日志 / 崩溃报告 ───────────────────────────────────────────────────
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*"                           "清理日志文件 (logs)"
@@ -1642,6 +1646,8 @@ deep_clean_runtime_cache() {
 
     # ── 工作区 / 历史 / 插件残留 ───────────────────────────────────────────
     clean_file_with_stats "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*"          "清理工作区状态缓存 (workspaceStorage)"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/History/*"                   "清理本地文件历史 (History)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*"           "清理旧版插件安装包残留"
 
     # ── 语言包缓存（clp 目录，保留最新版） ────────────────────────────────
@@ -1709,9 +1715,57 @@ deep_clean_runtime_cache() {
         fi
     fi
 
+    INDEXEDDB_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/IndexedDB")
+    WEBSTORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/WebStorage")
+    LOCAL_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Local Storage")
+    SESSION_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Session Storage")
+    SERVICE_WORKER_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Service Worker")
+    COOKIES_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Cookies")
+    NETWORK_STATE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Network Persistent State")
+    DIPS_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/DIPS")
+    SHARED_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/SharedStorage")
+    TRUST_TOKENS_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Trust Tokens")
+    RISKY_TOTAL_KB=$((INDEXEDDB_KB + WEBSTORAGE_KB + LOCAL_STORAGE_KB + SESSION_STORAGE_KB + SERVICE_WORKER_KB + COOKIES_KB + NETWORK_STATE_KB + DIPS_KB + SHARED_STORAGE_KB + TRUST_TOKENS_KB))
+
+    if [ "$AUTO_CONFIRM" != "--auto" ] && [ "$RISKY_TOTAL_KB" -gt 0 ] 2>/dev/null; then
+        echo ""
+        print_warning "仍检测到 $(format_kb_size "$RISKY_TOTAL_KB") 的高风险会话存储未清理"
+        echo "  继续清理会更彻底，但可能导致 Windsurf 内嵌网页服务重新登录"
+        [ "$INDEXEDDB_KB" -gt 0 ] && echo "  IndexedDB -> $(format_kb_size "$INDEXEDDB_KB")"
+        [ "$WEBSTORAGE_KB" -gt 0 ] && echo "  WebStorage -> $(format_kb_size "$WEBSTORAGE_KB")"
+        [ "$LOCAL_STORAGE_KB" -gt 0 ] && echo "  Local Storage -> $(format_kb_size "$LOCAL_STORAGE_KB")"
+        [ "$SESSION_STORAGE_KB" -gt 0 ] && echo "  Session Storage -> $(format_kb_size "$SESSION_STORAGE_KB")"
+        [ "$SERVICE_WORKER_KB" -gt 0 ] && echo "  Service Worker -> $(format_kb_size "$SERVICE_WORKER_KB")"
+        [ "$COOKIES_KB" -gt 0 ] && echo "  Cookies -> $(format_kb_size "$COOKIES_KB")"
+        echo -ne ${YELLOW}是否继续执行第二阶段高风险清理？[y/N]: ${NC}
+        read -r choice
+        case "$choice" in
+            y|Y )
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/IndexedDB/*"              "第二阶段清理 IndexedDB（可能导致重新登录）"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/WebStorage/*"             "第二阶段清理 WebStorage（可能导致重新登录）"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Local Storage/*"          "第二阶段清理 Local Storage（可能导致重新登录）"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Session Storage/*"        "第二阶段清理 Session Storage（可能导致重新登录）"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/*"         "第二阶段清理 Service Worker（可能导致重新登录）"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Cookies"                  "第二阶段清理 Cookies（可能导致重新登录）"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Cookies-journal"          "第二阶段清理 Cookies-journal"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Network Persistent State" "第二阶段清理 Network Persistent State"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/TransportSecurity"        "第二阶段清理 TransportSecurity"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/DIPS"                     "第二阶段清理 DIPS"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/DIPS-wal"                 "第二阶段清理 DIPS-wal"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/SharedStorage"            "第二阶段清理 SharedStorage"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/SharedStorage-wal"        "第二阶段清理 SharedStorage-wal"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Trust Tokens"             "第二阶段清理 Trust Tokens"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Trust Tokens-journal"     "第二阶段清理 Trust Tokens-journal"
+                ;;
+            * )
+                print_info "已保留登录态相关存储"
+                ;;
+        esac
+    fi
+
     echo ""
     print_success "深度清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
-    print_info "已保留对话历史、memories、skills、extensions、用户设置"
+    print_info "已保留对话历史、memories、skills、extensions、用户设置；第二阶段未执行时也会保留登录态相关存储"
     
     # 清理完成后自动重置 Windsurf ID
     echo ""

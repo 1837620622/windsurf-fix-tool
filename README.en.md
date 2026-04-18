@@ -128,6 +128,9 @@ chmod +x macos-safe-cleanup.sh
 3. Clean `CachedExtensionVSIXs` only when extension package cache is suspected.
 4. Use deep runtime cleanup when you want a stronger reset without touching chat
    history or login-related storage.
+   On macOS, option `18` now performs a safe deep cleanup first, then asks
+   whether to continue with risky session stores such as `IndexedDB`,
+   `WebStorage`, and `Cookies`.
 5. Treat `cascade` cleanup as a last resort for severe startup failures.
 
 ## Manual Cleanup Commands

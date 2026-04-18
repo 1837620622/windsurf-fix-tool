@@ -123,6 +123,8 @@ chmod +x macos-safe-cleanup.sh
    `DawnWebGPUCache`、`DawnGraphiteCache`、旧日志一起清理。
 3. 如果怀疑扩展安装包缓存膨胀，再清理 `CachedExtensionVSIXs`。
 4. 如果需要更激进但仍尽量保留历史和登录态，再使用“深度清理运行时缓存”。
+   现在 `macOS` 的 `18` 号选项会先执行默认安全深清，然后额外询问是否继续
+   清理 `IndexedDB / WebStorage / Cookies` 这一组高风险会话存储。
 5. 只有在启动失败或状态异常非常严重时，才把 `cascade` 当作最后手段处理。
 
 ## 手动清理命令
