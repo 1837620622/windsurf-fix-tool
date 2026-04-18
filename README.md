@@ -244,6 +244,7 @@ sudo chmod 4755 /path/to/windsurf/chrome-sandbox
 - 额外补充清理 MathWorks 的 `ServiceHost/logs` 和 `MATLAB/local_cluster_jobs`。
 - 会对 `/private/var/folders` 里的陈旧临时克隆、joblib memmap、
   `node-gyp-tmp`、`node-compile-cache` 做定向清理，但会跳过近期仍在活跃的目录。
+- 这类 `/private` 定向临时垃圾现在默认静默自动清理，只显示条数和总量，不再刷出内部文件明细。
 - 支持 Homebrew、npm、pip、Maven、Playwright、Telegram、微信等缓存清理。
 - 输出分隔符已改为 ASCII，降低部分终端的乱码概率。
 - 每一步都要求确认，便于只清理需要的项目。

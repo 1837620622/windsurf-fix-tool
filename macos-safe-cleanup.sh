@@ -55,7 +55,8 @@ format_size() {
 
 # 确认操作
 confirm() {
-    echo -ne "${YELLOW}$1 [y/N]: ${NC}"
+    local prompt="${1//？/?}"
+    echo -ne "${YELLOW}$prompt [y/N]: ${NC}"
     read -r choice
     case "$choice" in
         y|Y ) return 0;;
@@ -707,12 +708,13 @@ while IFS= read -r path; do TARGET_PATHS+=("$path"); done < <(find /private/var/
 while IFS= read -r path; do TARGET_PATHS+=("$path"); done < <(find /private/var/folders -path "*/T/node-compile-cache" -mtime +3 2>/dev/null)
 
 TARGET_TOTAL=0
+TARGET_COUNT=0
 for path in "${TARGET_PATHS[@]}"; do
     if [ -e "$path" ]; then
         size=$(get_size_bytes "$path")
         if [ "$size" -gt 0 ]; then
-            echo -e "  ${CYAN}$path${NC}: $(format_size $size)"
             TARGET_TOTAL=$((TARGET_TOTAL + size))
+            TARGET_COUNT=$((TARGET_COUNT + 1))
         fi
     fi
 done
@@ -732,18 +734,14 @@ if [ "$RECENT_COUNT" -gt 0 ] 2>/dev/null; then
 fi
 
 if [ "$TARGET_TOTAL" -gt 0 ]; then
-    echo -e "  ${CYAN}合计${NC}: $(format_size $TARGET_TOTAL)"
-    if confirm "  清理这些陈旧定向临时垃圾？"; then
-        for path in "${TARGET_PATHS[@]}"; do
-            if [ -e "$path" ]; then
-                rm -rf "$path" 2>/dev/null || sudo rm -rf "$path" 2>/dev/null
-            fi
-        done
-        TOTAL_FREED=$((TOTAL_FREED + TARGET_TOTAL))
-        print_success "  定向临时垃圾已清理"
-    else
-        print_info "  已跳过"
-    fi
+    print_info "  已识别 $TARGET_COUNT 个陈旧定向临时垃圾，合计 $(format_size $TARGET_TOTAL)"
+    for path in "${TARGET_PATHS[@]}"; do
+        if [ -e "$path" ]; then
+            rm -rf "$path" 2>/dev/null || sudo rm -rf "$path" 2>/dev/null
+        fi
+    done
+    TOTAL_FREED=$((TOTAL_FREED + TARGET_TOTAL))
+    print_success "  已自动清理这些陈旧定向临时垃圾"
 else
     print_info "  未检测到可清理的陈旧定向临时垃圾"
 fi

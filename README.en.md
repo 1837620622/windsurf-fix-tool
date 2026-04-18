@@ -256,6 +256,8 @@ cleanup. Its current behavior is:
 - It performs targeted cleanup for stale `/private/var/folders` items such as
   temporary clones, joblib memmaps, `node-gyp-tmp`, and `node-compile-cache`,
   while skipping recent active directories.
+- These targeted `/private` items are now cleaned silently by default, showing
+  only the count and total size instead of printing internal file details.
 - It supports cleanup for Homebrew, npm, pip, Maven, Playwright, Telegram,
   WeChat, and other large cache locations.
 - Section dividers were changed to ASCII to reduce display garbling in some
