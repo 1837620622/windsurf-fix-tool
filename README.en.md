@@ -195,7 +195,8 @@ Analyze disk space usage including directory sizes, hidden folder rankings, Libr
 - WeChat cache (6.9GB) → Clean in WeChat Settings recommended
 - System diagnostic logs (2.7GB) → Pure logs, safe to delete
 - Photo analysis cache (3.1GB) → System auto-rebuilds after deletion
-- Windsurf WebStorage (1GB) → May affect login state, keep by default
+- Windsurf CachedData / Cache / GPUCache / Dawn*Cache → Safe by default
+- Windsurf WebStorage (1GB) → May affect login state, preserved by default
 - Telegram cache (1.3GB) → Clean in Telegram Settings recommended
 - Homebrew, npm, Maven dev tool caches
 - User cache directories, temp files, DNS cache

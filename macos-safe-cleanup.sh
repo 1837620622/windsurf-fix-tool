@@ -417,22 +417,19 @@ echo ""
 print_info "14. Windsurf IDE 缓存"
 WS_DIR="$HOME/Library/Application Support/Windsurf"
 if [ -d "$WS_DIR" ]; then
+    safe_remove_dir "$WS_DIR/Cache" "Windsurf Cache"
     safe_remove_dir "$WS_DIR/CachedData" "Windsurf CachedData"
     safe_remove_dir "$WS_DIR/GPUCache" "Windsurf GPUCache"
     safe_remove_dir "$WS_DIR/Code Cache" "Windsurf Code Cache"
+    safe_remove_dir "$WS_DIR/DawnWebGPUCache" "Windsurf DawnWebGPUCache"
+    safe_remove_dir "$WS_DIR/DawnGraphiteCache" "Windsurf DawnGraphiteCache"
     
     WS_STORAGE="$WS_DIR/WebStorage"
     if [ -d "$WS_STORAGE" ]; then
         size=$(get_size_bytes "$WS_STORAGE")
         echo -e "  ${CYAN}Windsurf WebStorage${NC}: $(format_size $size)"
-        print_warning "  清理此项可能需要重新登录 Windsurf 的一些服务"
-        if confirm "  清理此项？"; then
-            rm -rf "$WS_STORAGE" 2>/dev/null
-            TOTAL_FREED=$((TOTAL_FREED + size))
-            print_success "  已清理 $(format_size $size)"
-        else
-            print_info "  已跳过"
-        fi
+        print_warning "  此目录更接近登录态和内嵌网页会话数据，默认不建议清理"
+        print_info "  已保留，如需处理请在明确接受重新登录风险后手动删除"
     fi
 fi
 echo ""

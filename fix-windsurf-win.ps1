@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 # Windsurf 修复工具 - Windows 版本 (PowerShell)
 # 用于修复 Windsurf IDE 卡顿、Shell无法连接等常见问题
 # 基于官方文档: https://docs.windsurf.com/troubleshooting/windsurf-common-issues

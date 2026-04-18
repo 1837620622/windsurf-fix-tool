@@ -351,7 +351,8 @@ Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedExtensionVSIXs"
 - iOS/iPadOS备份 → 自动识别MobileSync备份文件
 - 系统诊断日志 → 纯日志，安全删除
 - 照片分析缓存 → 删除后系统自动重建
-- Windsurf WebStorage → 可能关联登录态，默认不建议清理
+- Windsurf CachedData / Cache / GPUCache / Dawn*Cache → 默认安全清理
+- Windsurf WebStorage → 可能关联登录态，脚本默认保留
 - Telegram 缓存
 - Homebrew、npm、Maven 等开发工具缓存
 - 用户缓存目录、临时文件、DNS缓存
