@@ -121,6 +121,12 @@ check_windsurf_running() {
     if pgrep -x "Windsurf" > /dev/null 2>&1; then
         print_warning "检测到 Windsurf 正在运行"
         echo -e "  请先关闭 Windsurf 再执行修复操作"
+        if [ "${TERM_PROGRAM:-}" = "vscode" ]; then
+            print_warning "当前看起来是在 Windsurf / VS Code 类内置终端中运行"
+            echo -e "  如果在这里自动关闭 Windsurf，当前终端会一起消失，看起来就像“没反应”"
+            echo -e "  建议先手动关闭 Windsurf，再从 Terminal.app 或 iTerm 重新运行脚本"
+            return 1
+        fi
         echo -ne ${YELLOW}是否自动关闭Windsurf？[y/N]: ${NC}
         read -r choice
         case "$choice" in
@@ -128,13 +134,16 @@ check_windsurf_running() {
                 pkill -x "Windsurf" 2>/dev/null || true
                 sleep 2
                 print_success "Windsurf 已关闭"
+                return 0
                 ;;
             * )
                 print_error "请手动关闭 Windsurf 后重试"
-                exit 1
+                return 1
                 ;;
         esac
     fi
+
+    return 0
 }
 
 # ----------------------------------------------------------------------------
@@ -498,7 +507,9 @@ full_repair() {
     print_warning "此操作将执行所有修复步骤"
     
     if confirm_action; then
-        check_windsurf_running
+        if ! check_windsurf_running; then
+            return 1
+        fi
         clean_cascade_cache
         clean_extension_cache
         clean_startup_cache
@@ -1475,7 +1486,9 @@ reset_windsurf_id() {
     echo ""
     
     if confirm_action; then
-        check_windsurf_running
+        if ! check_windsurf_running; then
+            return 1
+        fi
         
         # 生成新的 UUID
         NEW_INSTALL_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
@@ -1609,7 +1622,9 @@ deep_clean_runtime_cache() {
         print_info "已启用自动确认模式"
     fi
 
-    check_windsurf_running
+    if ! check_windsurf_running; then
+        return 1
+    fi
     TOTAL_RELEASED_KB=0
 
     # ── Electron 内核缓存 ──────────────────────────────────────────────────
@@ -1906,7 +1921,9 @@ clean_startup_cache() {
     echo ""
     
     if confirm_action; then
-        check_windsurf_running
+        if ! check_windsurf_running; then
+            return 1
+        fi
         
         # 备份
         mkdir -p "$BACKUP_DIR"
@@ -2643,9 +2660,9 @@ show_menu() {
     read -r choice
     
     case $choice in
-        1) check_windsurf_running; clean_cascade_cache ;;
+        1) if check_windsurf_running; then clean_cascade_cache; fi ;;
         2) clean_startup_cache ;;
-        3) check_windsurf_running; clean_extension_cache ;;
+        3) if check_windsurf_running; then clean_extension_cache; fi ;;
         4) clean_dev_caches ;;
         5) clean_system_caches ;;
         6) analyze_disk_usage ;;
