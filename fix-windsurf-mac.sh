@@ -29,6 +29,7 @@ CASCADE_DIR="$WINDSURF_DIR/cascade"
 WINDSURF_APP="/Applications/Windsurf.app"
 BACKUP_DIR="$HOME/.windsurf-backup-$(date +%Y%m%d_%H%M%S)"
 WINDSURF_SUPPORT_DIR="$HOME/Library/Application Support/Windsurf"
+WINDSURF_RUNTIME_DIR="$WINDSURF_SUPPORT_DIR"
 IMPLICIT_DIR="$WINDSURF_DIR/implicit"
 CODE_TRACKER_DIR="$WINDSURF_DIR/code_tracker"
 MACOS_WS_CACHE="$HOME/Library/Caches/com.exafunction.windsurf"
@@ -167,16 +168,27 @@ clean_cascade_cache() {
 # ----------------------------------------------------------------------------
 clean_extension_cache() {
     print_info "清理扩展缓存..."
-    
-    CACHE_DIR="$WINDSURF_DIR/CachedData"
-    
+
     if confirm_action; then
-        # 清理缓存数据
-        if [ -d "$CACHE_DIR" ]; then
-            rm -rf "$CACHE_DIR"
-            print_success "已清理 CachedData"
+        CACHE_CLEARED=0
+
+        # 优先清理 Electron 运行时目录中的实际缓存路径，兼容旧版目录结构。
+        for cache_dir in \
+            "$WINDSURF_RUNTIME_DIR/CachedData" \
+            "$WINDSURF_RUNTIME_DIR/CachedExtensionVSIXs" \
+            "$WINDSURF_DIR/CachedData" \
+            "$WINDSURF_DIR/CachedExtensions"; do
+            if [ -d "$cache_dir" ]; then
+                rm -rf "$cache_dir"
+                print_success "已清理 $(basename "$cache_dir")"
+                CACHE_CLEARED=1
+            fi
+        done
+
+        if [ "$CACHE_CLEARED" -eq 0 ]; then
+            print_info "未找到可清理的扩展缓存目录"
         fi
-        
+
         print_success "扩展缓存清理完成"
     else
         print_info "已取消操作"
@@ -1906,7 +1918,7 @@ clean_startup_cache() {
     echo "此操作将清理以下缓存以加速启动:"
     echo "  - GPUCache (GPU渲染缓存)"
     echo "  - CachedData (编辑器缓存数据)"
-    echo "  - CachedExtensions (扩展缓存)"
+    echo "  - CachedExtensionVSIXs (扩展安装包缓存)"
     echo "  - Code Cache (代码缓存)"
     echo "  - 7天以上的日志文件"
     echo ""
@@ -1920,35 +1932,37 @@ clean_startup_cache() {
         mkdir -p "$BACKUP_DIR"
         
         # 清理 GPU 缓存
-        GPU_CACHE="$HOME/Library/Application Support/Windsurf/GPUCache"
+        GPU_CACHE="$WINDSURF_RUNTIME_DIR/GPUCache"
         if [ -d "$GPU_CACHE" ]; then
             rm -rf "$GPU_CACHE"
             print_success "已清理 GPUCache"
         fi
         
         # 清理 CachedData
-        CACHED_DATA="$WINDSURF_DIR/CachedData"
-        if [ -d "$CACHED_DATA" ]; then
-            rm -rf "$CACHED_DATA"
-            print_success "已清理 CachedData"
-        fi
-        
-        # 清理 CachedExtensions
-        CACHED_EXT="$WINDSURF_DIR/CachedExtensions"
-        if [ -d "$CACHED_EXT" ]; then
-            rm -rf "$CACHED_EXT"
-            print_success "已清理 CachedExtensions"
-        fi
+        for cache_dir in "$WINDSURF_RUNTIME_DIR/CachedData" "$WINDSURF_DIR/CachedData"; do
+            if [ -d "$cache_dir" ]; then
+                rm -rf "$cache_dir"
+                print_success "已清理 $(basename "$cache_dir")"
+            fi
+        done
+
+        # 清理扩展安装包缓存，兼容旧版目录结构。
+        for cache_dir in "$WINDSURF_RUNTIME_DIR/CachedExtensionVSIXs" "$WINDSURF_DIR/CachedExtensions"; do
+            if [ -d "$cache_dir" ]; then
+                rm -rf "$cache_dir"
+                print_success "已清理 $(basename "$cache_dir")"
+            fi
+        done
         
         # 清理 Code Cache
-        CODE_CACHE="$HOME/Library/Application Support/Windsurf/Code Cache"
+        CODE_CACHE="$WINDSURF_RUNTIME_DIR/Code Cache"
         if [ -d "$CODE_CACHE" ]; then
             rm -rf "$CODE_CACHE"
             print_success "已清理 Code Cache"
         fi
         
         # 清理 logs
-        LOGS_DIR="$HOME/Library/Application Support/Windsurf/logs"
+        LOGS_DIR="$WINDSURF_RUNTIME_DIR/logs"
         if [ -d "$LOGS_DIR" ]; then
             # 只清理超过7天的日志
             find "$LOGS_DIR" -type f -mtime +7 -delete 2>/dev/null

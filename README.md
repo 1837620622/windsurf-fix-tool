@@ -227,28 +227,30 @@ windsurf --no-sandbox
 **解决方案（不会清理对话历史）:**
 运行工具选择"清理启动缓存"，或手动清理：
 ```bash
-# macOS - 以下操作不会影响对话历史
+# macOS - 优先清理关键卡顿项 CachedData，不会影响对话历史、登录态和已安装扩展
+rm -rf ~/Library/Application\ Support/Windsurf/CachedData
+
+# 如果仍然卡顿，再继续清理以下运行时缓存
 rm -rf ~/Library/Application\ Support/Windsurf/GPUCache
 rm -rf ~/Library/Application\ Support/Windsurf/Code\ Cache
-rm -rf ~/.codeium/windsurf/CachedData
-rm -rf ~/.codeium/windsurf/CachedExtensions
+rm -rf ~/Library/Application\ Support/Windsurf/CachedExtensionVSIXs
 
 # Linux
+rm -rf ~/.config/Windsurf/CachedData
 rm -rf ~/.config/Windsurf/GPUCache
 rm -rf ~/.config/Windsurf/Code\ Cache
-rm -rf ~/.codeium/windsurf/CachedData
-rm -rf ~/.codeium/windsurf/CachedExtensions
+rm -rf ~/.config/Windsurf/CachedExtensionVSIXs
 ```
 
 ```powershell
 # Windows (PowerShell)
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedData"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\GPUCache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Code Cache"
-Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedData"
-Remove-Item -Recurse -Force "$env:USERPROFILE\.codeium\windsurf\CachedExtensions"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedExtensionVSIXs"
 ```
 
-**注意:** 对话历史保存在 `~/.codeium/windsurf/cascade` 目录，上述清理操作不会影响它。
+**注意:** 对话历史保存在 `~/.codeium/windsurf/cascade` 目录，上述运行时缓存清理不会影响它。
 
 ### 12. 开发工具缓存占用过多磁盘空间
 

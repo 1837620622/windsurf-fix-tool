@@ -20,6 +20,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 # ----------------------------------------------------------------------------
 $CodeiumDir = "$env:USERPROFILE\.codeium"
 $WindsurfDir = "$CodeiumDir\windsurf"
+$WindsurfAppData = Join-Path $env:APPDATA "Windsurf"
 $CascadeDir = "$WindsurfDir\cascade"
 $BackupDir = "$env:USERPROFILE\.windsurf-backup-$(Get-Date -Format 'yyyyMMdd_HHmmss')"
 $SettingsJsonPath = "$env:APPDATA\Windsurf\User\settings.json"
@@ -164,23 +165,33 @@ function Clear-CascadeCache {
 # ----------------------------------------------------------------------------
 function Clear-ExtensionCache {
     Write-ColorOutput "清理扩展缓存..." "Info"
-    
-    $cacheDir = "$WindsurfDir\CachedData"
-    
+
     if (Confirm-Action) {
-        if (Test-Path $cacheDir) {
-            try {
-                Remove-Item -Path $cacheDir -Recurse -Force
-                Write-ColorOutput "已清理 CachedData" "Success"
-            }
-            catch {
-                Write-ColorOutput "清理失败: $_" "Error"
+        $cacheCleared = $false
+        $cacheDirs = @(
+            (Join-Path $WindsurfAppData "CachedData"),
+            (Join-Path $WindsurfAppData "CachedExtensionVSIXs"),
+            (Join-Path $WindsurfDir "CachedData"),
+            (Join-Path $WindsurfDir "CachedExtensions")
+        )
+
+        foreach ($cacheDir in $cacheDirs) {
+            if (Test-Path $cacheDir) {
+                try {
+                    Remove-Item -Path $cacheDir -Recurse -Force
+                    Write-ColorOutput "已清理 $([System.IO.Path]::GetFileName($cacheDir))" "Success"
+                    $cacheCleared = $true
+                }
+                catch {
+                    Write-ColorOutput "清理失败: $_" "Error"
+                }
             }
         }
-        else {
-            Write-ColorOutput "CachedData 目录不存在" "Info"
+
+        if (-not $cacheCleared) {
+            Write-ColorOutput "未找到可清理的扩展缓存目录" "Info"
         }
-        
+
         Write-ColorOutput "扩展缓存清理完成" "Success"
     }
     else {
@@ -198,7 +209,7 @@ function Clear-StartupCache {
     Write-Host "此操作将清理以下缓存以加速启动:"
     Write-Host "  - GPUCache (GPU渲染缓存)"
     Write-Host "  - CachedData (编辑器缓存数据)"
-    Write-Host "  - CachedExtensions (扩展缓存)"
+    Write-Host "  - CachedExtensionVSIXs (扩展安装包缓存)"
     Write-Host "  - Code Cache (代码缓存)"
     Write-Host "  - 7天以上的日志文件"
     Write-Host ""
@@ -207,39 +218,39 @@ function Clear-StartupCache {
     
     if (Confirm-Action) {
         if (-not (Test-WindsurfRunning)) { return }
-        
-        $windsurfAppData = "$env:APPDATA\Windsurf"
-        
+
         # 清理 GPUCache
-        $gpuCache = "$windsurfAppData\GPUCache"
+        $gpuCache = Join-Path $WindsurfAppData "GPUCache"
         if (Test-Path $gpuCache) {
             Remove-Item -Path $gpuCache -Recurse -Force -ErrorAction SilentlyContinue
             Write-ColorOutput "已清理 GPUCache" "Success"
         }
         
         # 清理 CachedData
-        $cachedData = "$WindsurfDir\CachedData"
-        if (Test-Path $cachedData) {
-            Remove-Item -Path $cachedData -Recurse -Force -ErrorAction SilentlyContinue
-            Write-ColorOutput "已清理 CachedData" "Success"
+        foreach ($cachedData in @((Join-Path $WindsurfAppData "CachedData"), (Join-Path $WindsurfDir "CachedData"))) {
+            if (Test-Path $cachedData) {
+                Remove-Item -Path $cachedData -Recurse -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "已清理 $([System.IO.Path]::GetFileName($cachedData))" "Success"
+            }
         }
-        
-        # 清理 CachedExtensions
-        $cachedExt = "$WindsurfDir\CachedExtensions"
-        if (Test-Path $cachedExt) {
-            Remove-Item -Path $cachedExt -Recurse -Force -ErrorAction SilentlyContinue
-            Write-ColorOutput "已清理 CachedExtensions" "Success"
+
+        # 清理扩展安装包缓存，兼容旧版目录结构。
+        foreach ($cachedExt in @((Join-Path $WindsurfAppData "CachedExtensionVSIXs"), (Join-Path $WindsurfDir "CachedExtensions"))) {
+            if (Test-Path $cachedExt) {
+                Remove-Item -Path $cachedExt -Recurse -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "已清理 $([System.IO.Path]::GetFileName($cachedExt))" "Success"
+            }
         }
         
         # 清理 Code Cache
-        $codeCache = "$windsurfAppData\Code Cache"
+        $codeCache = Join-Path $WindsurfAppData "Code Cache"
         if (Test-Path $codeCache) {
             Remove-Item -Path $codeCache -Recurse -Force -ErrorAction SilentlyContinue
             Write-ColorOutput "已清理 Code Cache" "Success"
         }
         
         # 清理旧日志
-        $logsDir = "$windsurfAppData\logs"
+        $logsDir = Join-Path $WindsurfAppData "logs"
         if (Test-Path $logsDir) {
             Get-ChildItem -Path $logsDir -File -Recurse | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Force -ErrorAction SilentlyContinue
             Write-ColorOutput "已清理旧日志文件" "Success"

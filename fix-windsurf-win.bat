@@ -105,10 +105,13 @@ goto continue
 :: 清理扩展缓存
 :clean_extension
 echo.
-set "CACHE_DIR=%WINDSURF_DIR%\CachedData"
+set "CACHE_DIR=%APPDATA%\Windsurf\CachedData"
+set "CACHE_DIR_LEGACY=%WINDSURF_DIR%\CachedData"
+set "CACHE_VSIX_DIR=%APPDATA%\Windsurf\CachedExtensionVSIXs"
+set "CACHE_VSIX_DIR_LEGACY=%WINDSURF_DIR%\CachedExtensions"
 
-if not exist "%CACHE_DIR%" (
-    echo %BLUE%[信息]%NC% CachedData 目录不存在
+if not exist "%CACHE_DIR%" if not exist "%CACHE_DIR_LEGACY%" if not exist "%CACHE_VSIX_DIR%" if not exist "%CACHE_VSIX_DIR_LEGACY%" (
+    echo %BLUE%[信息]%NC% 未找到可清理的扩展缓存目录
     goto continue
 )
 
@@ -118,12 +121,23 @@ if /i not "%confirm%"=="y" (
     goto continue
 )
 
-rmdir /S /Q "%CACHE_DIR%"
-if errorlevel 1 (
-    echo %RED%[错误]%NC% 清理失败
-) else (
-    echo %GREEN%[成功]%NC% 扩展缓存已清理
+if exist "%CACHE_DIR%" (
+    rmdir /S /Q "%CACHE_DIR%"
+    if not errorlevel 1 echo %GREEN%[成功]%NC% 已清理 CachedData
 )
+if exist "%CACHE_DIR_LEGACY%" (
+    rmdir /S /Q "%CACHE_DIR_LEGACY%"
+    if not errorlevel 1 echo %GREEN%[成功]%NC% 已清理旧版 CachedData
+)
+if exist "%CACHE_VSIX_DIR%" (
+    rmdir /S /Q "%CACHE_VSIX_DIR%"
+    if not errorlevel 1 echo %GREEN%[成功]%NC% 已清理 CachedExtensionVSIXs
+)
+if exist "%CACHE_VSIX_DIR_LEGACY%" (
+    rmdir /S /Q "%CACHE_VSIX_DIR_LEGACY%"
+    if not errorlevel 1 echo %GREEN%[成功]%NC% 已清理旧版 CachedExtensions
+)
+echo %GREEN%[成功]%NC% 扩展缓存已清理
 goto continue
 
 :: 检查进程
