@@ -207,8 +207,10 @@ function Clear-StartupCache {
     
     Write-Host ""
     Write-Host "此操作将清理以下缓存以加速启动:"
+    Write-Host "  - Cache (浏览器缓存)"
     Write-Host "  - GPUCache (GPU渲染缓存)"
     Write-Host "  - CachedData (编辑器缓存数据)"
+    Write-Host "  - DawnWebGPUCache / DawnGraphiteCache (图形管线缓存)"
     Write-Host "  - CachedExtensionVSIXs (扩展安装包缓存)"
     Write-Host "  - Code Cache (代码缓存)"
     Write-Host "  - 7天以上的日志文件"
@@ -220,6 +222,12 @@ function Clear-StartupCache {
         if (-not (Test-WindsurfRunning)) { return }
 
         # 清理 GPUCache
+        $cacheDir = Join-Path $WindsurfAppData "Cache"
+        if (Test-Path $cacheDir) {
+            Remove-Item -Path $cacheDir -Recurse -Force -ErrorAction SilentlyContinue
+            Write-ColorOutput "已清理 Cache" "Success"
+        }
+
         $gpuCache = Join-Path $WindsurfAppData "GPUCache"
         if (Test-Path $gpuCache) {
             Remove-Item -Path $gpuCache -Recurse -Force -ErrorAction SilentlyContinue
@@ -247,6 +255,13 @@ function Clear-StartupCache {
         if (Test-Path $codeCache) {
             Remove-Item -Path $codeCache -Recurse -Force -ErrorAction SilentlyContinue
             Write-ColorOutput "已清理 Code Cache" "Success"
+        }
+
+        foreach ($graphCache in @((Join-Path $WindsurfAppData "DawnWebGPUCache"), (Join-Path $WindsurfAppData "DawnGraphiteCache"))) {
+            if (Test-Path $graphCache) {
+                Remove-Item -Path $graphCache -Recurse -Force -ErrorAction SilentlyContinue
+                Write-ColorOutput "已清理 $([System.IO.Path]::GetFileName($graphCache))" "Success"
+            }
         }
         
         # 清理旧日志
@@ -1424,14 +1439,9 @@ function Get-RuntimeCacheTotalKb {
         "$WsAppData\Code Cache",
         "$WsAppData\DawnWebGPUCache",
         "$WsAppData\DawnGraphiteCache",
-        "$WsAppData\blob_storage",
         "$WsAppData\logs",
         "$WsAppData\Crashpad\completed",
         "$WsAppData\Crashpad\pending",
-        "$WsAppData\Service Worker\CacheStorage",
-        "$WsAppData\Service Worker\ScriptCache",
-        "$WsAppData\User\workspaceStorage",
-        "$WsAppData\User\History",
         "$WsAppData\CachedExtensionVSIXs",
         $ImplicitDir,
         $CodeTrackerDir
@@ -1465,7 +1475,7 @@ function Deep-CleanRuntimeCache {
     Write-ColorOutput "深度清理运行时缓存（保留对话历史）..." "Info"
     Write-Host ""
     Write-Host "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
-    Write-ColorOutput "不会清理对话历史、memories、skills、extensions、用户设置" "Success"
+    Write-ColorOutput "不会清理对话历史、登录态相关存储（IndexedDB/WebStorage/Local Storage/Session Storage/Service Worker）、memories、skills、extensions、用户设置" "Success"
     Write-Host ""
 
     # 判断是否需要手动确认
@@ -1491,15 +1501,10 @@ function Deep-CleanRuntimeCache {
     Remove-PathWithStats "$WsAppData\Code Cache"                                 "清理代码缓存 (Code Cache)"
     Remove-PathWithStats "$WsAppData\DawnWebGPUCache"                            "清理 Dawn WebGPU 缓存"
     Remove-PathWithStats "$WsAppData\DawnGraphiteCache"                          "清理 Dawn Graphite 缓存"
-    Remove-PathWithStats "$WsAppData\blob_storage"                               "清理 Blob Storage 缓存"
     Remove-PathWithStats "$WsAppData\logs"                                       "清理日志文件 (logs)"
     Remove-PathWithStats "$WsAppData\Crashpad\completed"                         "清理 Crashpad completed"
     Remove-PathWithStats "$WsAppData\Crashpad\pending"                           "清理 Crashpad pending"
-    Remove-PathWithStats "$WsAppData\Service Worker\CacheStorage"                "清理 Service Worker CacheStorage"
-    Remove-PathWithStats "$WsAppData\Service Worker\ScriptCache"                 "清理 Service Worker ScriptCache"
     Remove-PathWithStats "$WsAppData\User\globalStorage\state.vscdb.backup"      "清理 state.vscdb.backup（关键大文件）"
-    Remove-PathWithStats "$WsAppData\User\workspaceStorage"                      "清理历史工作区索引 (workspaceStorage)"
-    Remove-PathWithStats "$WsAppData\User\History"                               "清理本地文件历史备份 (Local History)"
     Remove-PathWithStats "$WsAppData\CachedExtensionVSIXs"                       "清理旧版插件安装包残留"
     Remove-PathWithStats $ImplicitDir                                             "清理 implicit AI 索引缓存"
     Remove-PathWithStats $CodeTrackerDir                                          "清理 AI 代码追踪索引 (code_tracker)"

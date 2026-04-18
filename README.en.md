@@ -88,24 +88,42 @@ This clears GPU cache, code cache, and extension cache **without** affecting you
 ```bash
 # Manual cleanup (macOS)
 rm -rf ~/Library/Application\ Support/Windsurf/CachedData
+rm -rf ~/Library/Application\ Support/Windsurf/Cache
 rm -rf ~/Library/Application\ Support/Windsurf/GPUCache
 rm -rf ~/Library/Application\ Support/Windsurf/Code\ Cache
+rm -rf ~/Library/Application\ Support/Windsurf/DawnWebGPUCache
+rm -rf ~/Library/Application\ Support/Windsurf/DawnGraphiteCache
 rm -rf ~/Library/Application\ Support/Windsurf/CachedExtensionVSIXs
 
 # Manual cleanup (Linux)
 rm -rf ~/.config/Windsurf/CachedData
+rm -rf ~/.config/Windsurf/Cache
 rm -rf ~/.config/Windsurf/GPUCache
 rm -rf ~/.config/Windsurf/Code\ Cache
+rm -rf ~/.config/Windsurf/DawnWebGPUCache
+rm -rf ~/.config/Windsurf/DawnGraphiteCache
 rm -rf ~/.config/Windsurf/CachedExtensionVSIXs
 ```
 
 ```powershell
 # Manual cleanup (Windows PowerShell)
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedData"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Cache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\GPUCache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Code Cache"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\DawnWebGPUCache"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\DawnGraphiteCache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedExtensionVSIXs"
 ```
+
+Avoid cleaning these folders by default:
+- `IndexedDB`
+- `WebStorage`
+- `Local Storage`
+- `Session Storage`
+- `Service Worker`
+
+These locations are closer to Electron persistent site and session data, so clearing them may require logging in again for some embedded services.
 
 ### 2. MCP Not Auto-Loading
 
@@ -177,7 +195,7 @@ Analyze disk space usage including directory sizes, hidden folder rankings, Libr
 - WeChat cache (6.9GB) → Clean in WeChat Settings recommended
 - System diagnostic logs (2.7GB) → Pure logs, safe to delete
 - Photo analysis cache (3.1GB) → System auto-rebuilds after deletion
-- Windsurf WebStorage (1GB) → Cache data
+- Windsurf WebStorage (1GB) → May affect login state, keep by default
 - Telegram cache (1.3GB) → Clean in Telegram Settings recommended
 - Homebrew, npm, Maven dev tool caches
 - User cache directories, temp files, DNS cache

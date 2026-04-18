@@ -366,8 +366,10 @@ clean_startup_cache() {
     
     echo ""
     echo "此操作将清理以下缓存以加速启动:"
+    echo "  - Cache (浏览器缓存)"
     echo "  - GPUCache (GPU渲染缓存)"
     echo "  - CachedData (编辑器缓存数据)"
+    echo "  - DawnWebGPUCache / DawnGraphiteCache (图形管线缓存)"
     echo "  - CachedExtensionVSIXs (扩展安装包缓存)"
     echo "  - Code Cache (代码缓存)"
     echo "  - 7天以上的日志文件"
@@ -379,6 +381,12 @@ clean_startup_cache() {
         check_windsurf_running
         
         # 清理 GPU 缓存
+        CACHE_DIR="$WINDSURF_CONFIG_DIR/Cache"
+        if [ -d "$CACHE_DIR" ]; then
+            rm -rf "$CACHE_DIR"
+            print_success "已清理 Cache"
+        fi
+
         GPU_CACHE="$WINDSURF_CONFIG_DIR/GPUCache"
         if [ -d "$GPU_CACHE" ]; then
             rm -rf "$GPU_CACHE"
@@ -407,6 +415,13 @@ clean_startup_cache() {
             rm -rf "$CODE_CACHE"
             print_success "已清理 Code Cache"
         fi
+
+        for cache_dir in "$WINDSURF_CONFIG_DIR/DawnWebGPUCache" "$WINDSURF_CONFIG_DIR/DawnGraphiteCache"; do
+            if [ -d "$cache_dir" ]; then
+                rm -rf "$cache_dir"
+                print_success "已清理 $(basename "$cache_dir")"
+            fi
+        done
         
         # 清理 logs
         LOGS_DIR="$WINDSURF_CONFIG_DIR/logs"
@@ -1375,14 +1390,9 @@ calculate_runtime_cache_total_kb() {
         "$LINUX_WS_CONFIG/Code Cache/*" \
         "$LINUX_WS_CONFIG/DawnWebGPUCache/*" \
         "$LINUX_WS_CONFIG/DawnGraphiteCache/*" \
-        "$LINUX_WS_CONFIG/blob_storage/*" \
         "$LINUX_WS_CONFIG/logs/*" \
         "$LINUX_WS_CONFIG/Crashpad/completed/*" \
         "$LINUX_WS_CONFIG/Crashpad/pending/*" \
-        "$LINUX_WS_CONFIG/Service Worker/CacheStorage/*" \
-        "$LINUX_WS_CONFIG/Service Worker/ScriptCache/*" \
-        "$LINUX_WS_CONFIG/User/workspaceStorage/*" \
-        "$LINUX_WS_CONFIG/User/History/*" \
         "$LINUX_WS_CONFIG/CachedExtensionVSIXs/*" \
         "$WINDSURF_DIR/implicit/*" \
         "$WINDSURF_DIR/code_tracker/*" \
@@ -1722,7 +1732,7 @@ deep_clean_runtime_cache() {
 
     echo ""
     echo "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
-    print_success "不会清理对话历史、memories、skills、extensions、用户设置"
+    print_success "不会清理对话历史、登录态相关存储（IndexedDB/WebStorage/Local Storage/Session Storage/Service Worker）、memories、skills、extensions、用户设置"
     echo ""
 
     # 判断是否自动确认（被 smart_optimize 调用时）
@@ -1746,15 +1756,10 @@ deep_clean_runtime_cache() {
     clean_glob_with_stats "$LINUX_WS_CONFIG/Code Cache/*"                         "清理代码缓存 (Code Cache)"
     clean_glob_with_stats "$LINUX_WS_CONFIG/DawnWebGPUCache/*"                    "清理 Dawn WebGPU 缓存"
     clean_glob_with_stats "$LINUX_WS_CONFIG/DawnGraphiteCache/*"                  "清理 Dawn Graphite 缓存"
-    clean_glob_with_stats "$LINUX_WS_CONFIG/blob_storage/*"                       "清理 Blob Storage 缓存"
     clean_glob_with_stats "$LINUX_WS_CONFIG/logs/*"                               "清理日志文件 (logs)"
     clean_glob_with_stats "$LINUX_WS_CONFIG/Crashpad/completed/*"                 "清理 Crashpad completed"
     clean_glob_with_stats "$LINUX_WS_CONFIG/Crashpad/pending/*"                   "清理 Crashpad pending"
-    clean_glob_with_stats "$LINUX_WS_CONFIG/Service Worker/CacheStorage/*"        "清理 Service Worker CacheStorage"
-    clean_glob_with_stats "$LINUX_WS_CONFIG/Service Worker/ScriptCache/*"         "清理 Service Worker ScriptCache"
     clean_file_with_stats "$LINUX_WS_CONFIG/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
-    clean_glob_with_stats "$LINUX_WS_CONFIG/User/workspaceStorage/*"              "清理历史工作区索引 (workspaceStorage)"
-    clean_glob_with_stats "$LINUX_WS_CONFIG/User/History/*"                       "清理本地文件历史备份 (Local History)"
     clean_glob_with_stats "$LINUX_WS_CONFIG/CachedExtensionVSIXs/*"               "清理旧版插件安装包残留"
     clean_glob_with_stats "$IMPLICIT_LINUX/*"                                      "清理 implicit AI 索引缓存"
     clean_glob_with_stats "$CODE_TRACKER_LINUX/*"                                  "清理 AI 代码追踪索引 (code_tracker)"

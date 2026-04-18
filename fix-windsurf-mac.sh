@@ -693,18 +693,9 @@ calculate_runtime_cache_total_kb() {
         "$WINDSURF_SUPPORT_DIR/Code Cache/*" \
         "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*" \
         "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*" \
-        "$WINDSURF_SUPPORT_DIR/blob_storage/*" \
-        "$WINDSURF_SUPPORT_DIR/Local Storage/*" \
-        "$WINDSURF_SUPPORT_DIR/Session Storage/*" \
-        "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*" \
-        "$WINDSURF_SUPPORT_DIR/Network/*" \
         "$WINDSURF_SUPPORT_DIR/logs/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*" \
         "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*" \
-        "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*" \
-        "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*" \
-        "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*" \
-        "$WINDSURF_SUPPORT_DIR/User/History/*" \
         "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*" \
         "$WINDSURF_SUPPORT_DIR/CachedProfilesData/*" \
         "$IMPLICIT_DIR/*" \
@@ -1606,7 +1597,7 @@ deep_clean_runtime_cache() {
 
     echo ""
     echo "此操作将清理运行时缓存和日志，包含大型 state.vscdb.backup 文件"
-    print_success "不会清理对话历史（cascade/*.pb）、memories、skills、extensions、用户设置"
+    print_success "不会清理对话历史（cascade/*.pb）、登录态相关存储（IndexedDB/WebStorage/Local Storage/Session Storage/Service Worker）、memories、skills、extensions、用户设置"
     echo ""
 
     if [ "$AUTO_CONFIRM" != "--auto" ]; then
@@ -1628,27 +1619,14 @@ deep_clean_runtime_cache() {
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*"                     "清理代码缓存 (Code Cache)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*"                "清理 Dawn WebGPU 缓存"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*"              "清理 Dawn Graphite 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/blob_storage/*"                   "清理 Blob Storage 缓存"
-
-    # ── 网络/存储缓存 ─────────────────────────────────────────────────────
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Local Storage/*"                  "清理 Local Storage 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Session Storage/*"                "清理 Session Storage 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*"              "清理 Shared Dictionary 缓存"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Network/*"                        "清理 Network 缓存"
 
     # ── 日志 / 崩溃报告 ───────────────────────────────────────────────────
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*"                           "清理日志文件 (logs)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*"             "清理 Crashpad completed"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*"               "清理 Crashpad pending"
 
-    # ── Service Worker 缓存 ────────────────────────────────────────────────
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*"    "清理 Service Worker CacheStorage"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*"     "清理 Service Worker ScriptCache"
-
     # ── 工作区 / 历史 / 插件残留 ───────────────────────────────────────────
     clean_file_with_stats "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（关键大文件）"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/workspaceStorage/*"          "清理历史工作区索引 (workspaceStorage)"
-    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/User/History/*"                   "清理本地文件历史备份 (Local History)"
     clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*"           "清理旧版插件安装包残留"
 
     # ── 语言包缓存（clp 目录，保留最新版） ────────────────────────────────
@@ -1916,8 +1894,10 @@ clean_startup_cache() {
     
     echo ""
     echo "此操作将清理以下缓存以加速启动:"
+    echo "  - Cache (浏览器缓存)"
     echo "  - GPUCache (GPU渲染缓存)"
     echo "  - CachedData (编辑器缓存数据)"
+    echo "  - DawnWebGPUCache / DawnGraphiteCache (图形管线缓存)"
     echo "  - CachedExtensionVSIXs (扩展安装包缓存)"
     echo "  - Code Cache (代码缓存)"
     echo "  - 7天以上的日志文件"
@@ -1932,6 +1912,12 @@ clean_startup_cache() {
         mkdir -p "$BACKUP_DIR"
         
         # 清理 GPU 缓存
+        CACHE_DIR="$WINDSURF_RUNTIME_DIR/Cache"
+        if [ -d "$CACHE_DIR" ]; then
+            rm -rf "$CACHE_DIR"
+            print_success "已清理 Cache"
+        fi
+
         GPU_CACHE="$WINDSURF_RUNTIME_DIR/GPUCache"
         if [ -d "$GPU_CACHE" ]; then
             rm -rf "$GPU_CACHE"
@@ -1960,6 +1946,13 @@ clean_startup_cache() {
             rm -rf "$CODE_CACHE"
             print_success "已清理 Code Cache"
         fi
+
+        for cache_dir in "$WINDSURF_RUNTIME_DIR/DawnWebGPUCache" "$WINDSURF_RUNTIME_DIR/DawnGraphiteCache"; do
+            if [ -d "$cache_dir" ]; then
+                rm -rf "$cache_dir"
+                print_success "已清理 $(basename "$cache_dir")"
+            fi
+        done
         
         # 清理 logs
         LOGS_DIR="$WINDSURF_RUNTIME_DIR/logs"

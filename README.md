@@ -231,26 +231,44 @@ windsurf --no-sandbox
 rm -rf ~/Library/Application\ Support/Windsurf/CachedData
 
 # 如果仍然卡顿，再继续清理以下运行时缓存
+rm -rf ~/Library/Application\ Support/Windsurf/Cache
 rm -rf ~/Library/Application\ Support/Windsurf/GPUCache
 rm -rf ~/Library/Application\ Support/Windsurf/Code\ Cache
+rm -rf ~/Library/Application\ Support/Windsurf/DawnWebGPUCache
+rm -rf ~/Library/Application\ Support/Windsurf/DawnGraphiteCache
 rm -rf ~/Library/Application\ Support/Windsurf/CachedExtensionVSIXs
 
 # Linux
 rm -rf ~/.config/Windsurf/CachedData
+rm -rf ~/.config/Windsurf/Cache
 rm -rf ~/.config/Windsurf/GPUCache
 rm -rf ~/.config/Windsurf/Code\ Cache
+rm -rf ~/.config/Windsurf/DawnWebGPUCache
+rm -rf ~/.config/Windsurf/DawnGraphiteCache
 rm -rf ~/.config/Windsurf/CachedExtensionVSIXs
 ```
 
 ```powershell
 # Windows (PowerShell)
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedData"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Cache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\GPUCache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Code Cache"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\DawnWebGPUCache"
+Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\DawnGraphiteCache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedExtensionVSIXs"
 ```
 
 **注意:** 对话历史保存在 `~/.codeium/windsurf/cascade` 目录，上述运行时缓存清理不会影响它。
+
+**默认不建议清理的目录:**
+- `IndexedDB`
+- `WebStorage`
+- `Local Storage`
+- `Session Storage`
+- `Service Worker`
+
+这些目录更接近 Electron 持久化站点/会话数据，可能导致部分登录态或内嵌网页状态失效。只有在明确接受重新登录风险时，才建议手动处理。
 
 ### 12. 开发工具缓存占用过多磁盘空间
 
@@ -333,7 +351,7 @@ Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedExtensionVSIXs"
 - iOS/iPadOS备份 → 自动识别MobileSync备份文件
 - 系统诊断日志 → 纯日志，安全删除
 - 照片分析缓存 → 删除后系统自动重建
-- Windsurf WebStorage → 缓存数据
+- Windsurf WebStorage → 可能关联登录态，默认不建议清理
 - Telegram 缓存
 - Homebrew、npm、Maven 等开发工具缓存
 - 用户缓存目录、临时文件、DNS缓存
