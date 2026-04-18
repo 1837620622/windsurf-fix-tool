@@ -245,11 +245,17 @@ cleanup. Its current behavior is:
 - It cleans Windsurf `CachedData`, `Cache`, `GPUCache`, `Code Cache`, and
   `Dawn*Cache` by default.
 - It only displays the risk of `WebStorage` and keeps it by default.
+- It cleans `~/Library/Logs`, `~/Library/Caches`, and selected rebuildable
+  hidden caches under `~/.cache`, such as `codex-runtimes`, `uv`, `selenium`,
+  `vscode-ripgrep`, and `WebDriver Manager`.
 - It also targets Chrome component caches, speech model caches, shader caches,
   and Crashpad caches.
 - It also targets Choice `temp`, `logs`, and `crash` directories.
 - It also targets MathWorks `ServiceHost/logs` and
   `MATLAB/local_cluster_jobs`.
+- It performs targeted cleanup for stale `/private/var/folders` items such as
+  temporary clones, joblib memmaps, `node-gyp-tmp`, and `node-compile-cache`,
+  while skipping recent active directories.
 - It supports cleanup for Homebrew, npm, pip, Maven, Playwright, Telegram,
   WeChat, and other large cache locations.
 - Section dividers were changed to ASCII to reduce display garbling in some

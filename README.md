@@ -236,9 +236,14 @@ sudo chmod 4755 /path/to/windsurf/chrome-sandbox
 - 默认清理 Windsurf 的 `CachedData`、`Cache`、`GPUCache`、
   `Code Cache`、`Dawn*Cache`。
 - 仅展示 `WebStorage` 风险，不会默认删除。
+- 会清理 `~/Library/Logs`、`~/Library/Caches`、`~/.cache` 下已确认可再生的
+  隐藏缓存，例如 `codex-runtimes`、`uv`、`selenium`、
+  `vscode-ripgrep`、`WebDriver Manager`。
 - 额外补充清理 Chrome 的组件缓存、语音模型缓存、Shader 缓存、Crashpad 缓存。
 - 额外补充清理 Choice 的 `temp`、`logs`、`crash` 目录。
 - 额外补充清理 MathWorks 的 `ServiceHost/logs` 和 `MATLAB/local_cluster_jobs`。
+- 会对 `/private/var/folders` 里的陈旧临时克隆、joblib memmap、
+  `node-gyp-tmp`、`node-compile-cache` 做定向清理，但会跳过近期仍在活跃的目录。
 - 支持 Homebrew、npm、pip、Maven、Playwright、Telegram、微信等缓存清理。
 - 输出分隔符已改为 ASCII，降低部分终端的乱码概率。
 - 每一步都要求确认，便于只清理需要的项目。

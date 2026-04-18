@@ -128,8 +128,13 @@ print_info "1. 用户应用缓存 (~/Library/Caches)"
 safe_clean_dir "$HOME/Library/Caches" "用户应用缓存"
 echo ""
 
-# 2. Apple 照片分析缓存（3.1GB）
-print_info "2. Apple 照片分析缓存 (mediaanalysisd)"
+# 2. 用户日志目录
+print_info "2. 用户日志目录 (~/Library/Logs)"
+safe_clean_dir "$HOME/Library/Logs" "用户日志"
+echo ""
+
+# 3. Apple 照片分析缓存（3.1GB）
+print_info "3. Apple 照片分析缓存 (mediaanalysisd)"
 print_warning "删除后系统会在后台重新分析照片，不影响照片本身"
 MEDIA_ANALYSIS="$HOME/Library/Containers/com.apple.mediaanalysisd"
 if [ -d "$MEDIA_ANALYSIS" ]; then
@@ -153,8 +158,8 @@ if [ -d "$MEDIA_ANALYSIS" ]; then
 fi
 echo ""
 
-# 3. Homebrew 缓存清理
-print_info "3. Homebrew 缓存和旧版本"
+# 4. Homebrew 缓存清理
+print_info "4. Homebrew 缓存和旧版本"
 if command -v brew &>/dev/null; then
     BREW_CACHE=$(brew --cache 2>/dev/null)
     if [ -n "$BREW_CACHE" ] && [ -d "$BREW_CACHE" ]; then
@@ -178,8 +183,8 @@ if command -v brew &>/dev/null; then
 fi
 echo ""
 
-# 4. npm 缓存
-print_info "4. npm 缓存"
+# 5. npm 缓存
+print_info "5. npm 缓存"
 NPM_CACHE="$HOME/.npm"
 if [ -d "$NPM_CACHE" ]; then
     safe_clean_dir "$NPM_CACHE/_cacache" "npm 下载缓存"
@@ -188,16 +193,26 @@ if [ -d "$NPM_CACHE" ]; then
 fi
 echo ""
 
-# 5. pip 缓存
-print_info "5. pip 缓存"
+# 6. 通用隐藏缓存
+print_info "6. 通用隐藏缓存 (~/.cache 与 node-gyp)"
+safe_remove_dir "$HOME/.cache/codex-runtimes" "codex runtimes 下载缓存"
+safe_remove_dir "$HOME/.cache/uv" "uv 包缓存"
+safe_remove_dir "$HOME/.cache/selenium" "Selenium 驱动缓存"
+safe_remove_dir "$HOME/.cache/vscode-ripgrep" "VS Code ripgrep 缓存"
+safe_remove_dir "$HOME/.wdm" "WebDriver Manager 缓存"
+safe_remove_dir "$HOME/Library/Caches/node-gyp" "node-gyp 构建缓存"
+echo ""
+
+# 7. pip 缓存
+print_info "7. pip 缓存"
 PIP_CACHE="$HOME/Library/Caches/pip"
 if [ -d "$PIP_CACHE" ]; then
     safe_clean_dir "$PIP_CACHE" "pip 下载缓存"
 fi
 echo ""
 
-# 6. Maven 缓存（旧仓库数据）
-print_info "6. Maven 本地仓库"
+# 8. Maven 缓存（旧仓库数据）
+print_info "8. Maven 本地仓库"
 M2_REPO="$HOME/.m2/repository"
 if [ -d "$M2_REPO" ]; then
     size=$(get_size_bytes "$M2_REPO")
@@ -213,13 +228,13 @@ if [ -d "$M2_REPO" ]; then
 fi
 echo ""
 
-# 7. Playwright 浏览器缓存
-print_info "7. Playwright 浏览器缓存"
+# 9. Playwright 浏览器缓存
+print_info "9. Playwright 浏览器缓存"
 safe_remove_dir "$HOME/Library/Caches/ms-playwright" "Playwright 浏览器"
 echo ""
 
-# 8. DNS 缓存
-print_info "8. DNS 缓存刷新"
+# 10. DNS 缓存
+print_info "10. DNS 缓存刷新"
 if confirm "  刷新 DNS 缓存？"; then
     sudo dscacheutil -flushcache 2>/dev/null
     sudo killall -HUP mDNSResponder 2>/dev/null
@@ -236,8 +251,8 @@ echo -e "\n${YELLOW}${SECTION_BAR}${NC}"
 echo -e "${YELLOW}  第二部分: 中等风险清理（应用缓存，建议先关闭对应应用）${NC}"
 echo -e "${YELLOW}${SECTION_BAR}${NC}\n"
 
-# 9. 微信缓存
-print_info "9. 微信缓存"
+# 10. 微信缓存
+print_info "10. 微信缓存"
 WECHAT_CONTAINER="$HOME/Library/Containers/com.tencent.xinWeChat"
 if [ -d "$WECHAT_CONTAINER" ]; then
     size=$(get_size_bytes "$WECHAT_CONTAINER")
@@ -307,8 +322,8 @@ if [ -d "$WECHAT_CONTAINER" ]; then
 fi
 echo ""
 
-# 10. WPS 缓存
-print_info "10. WPS Office 缓存"
+# 11. WPS 缓存
+print_info "11. WPS Office 缓存"
 WPS_CONTAINER="$HOME/Library/Containers/com.kingsoft.wpsoffice.mac"
 if [ -d "$WPS_CONTAINER" ]; then
     WPS_CACHE="$WPS_CONTAINER/Data/Library/Caches"
@@ -322,8 +337,8 @@ if [ -d "$WPS_CONTAINER" ]; then
 fi
 echo ""
 
-# 11. Telegram 缓存
-print_info "11. Telegram 缓存"
+# 12. Telegram 缓存
+print_info "12. Telegram 缓存"
 TG_CACHE="$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
 if [ -d "$TG_CACHE" ]; then
     size=$(get_size_bytes "$TG_CACHE")
@@ -338,8 +353,8 @@ if [ -d "$TG_CACHE" ]; then
 fi
 echo ""
 
-# 12. QQ 缓存
-print_info "12. QQ 缓存"
+# 13. QQ 缓存
+print_info "13. QQ 缓存"
 QQ_CONTAINER="$HOME/Library/Containers/com.tencent.qq"
 if [ -d "$QQ_CONTAINER" ]; then
     size=$(get_size_bytes "$QQ_CONTAINER")
@@ -408,8 +423,8 @@ if [ -d "$QQ_CONTAINER" ]; then
 fi
 echo ""
 
-# 13. Google Chrome 缓存
-print_info "13. Google Chrome 缓存"
+# 14. Google Chrome 缓存
+print_info "14. Google Chrome 缓存"
 CHROME_CACHE="$HOME/Library/Application Support/Google/Chrome/Default/Service Worker"
 CHROME_CACHE2="$HOME/Library/Application Support/Google/Chrome/Default/Cache"
 CHROME_CODE="$HOME/Library/Application Support/Google/Chrome/Default/Code Cache"
@@ -440,8 +455,13 @@ safe_remove_dir "$CHROME_EXT_CRX" "Chrome 扩展安装包缓存"
 safe_remove_dir "$CHROME_CRASHPAD" "Chrome Crashpad 缓存"
 echo ""
 
-# 14. Windsurf 缓存
-print_info "14. Windsurf IDE 缓存"
+# 15. 系统级桌面图片缓存
+print_info "15. 桌面图片缓存 (/Library/Caches/Desktop Pictures)"
+safe_remove_dir "/Library/Caches/Desktop Pictures" "桌面图片缓存"
+echo ""
+
+# 16. Windsurf 缓存
+print_info "16. Windsurf IDE 缓存"
 WS_DIR="$HOME/Library/Application Support/Windsurf"
 if [ -d "$WS_DIR" ]; then
     safe_remove_dir "$WS_DIR/Cache" "Windsurf Cache"
@@ -461,8 +481,8 @@ if [ -d "$WS_DIR" ]; then
 fi
 echo ""
 
-# 15. Choice 临时与日志缓存
-print_info "15. Choice 临时与日志缓存"
+# 17. Choice 临时与日志缓存
+print_info "17. Choice 临时与日志缓存"
 CHOICE_DIR="$HOME/Library/Application Support/Choice"
 if [ -d "$CHOICE_DIR" ]; then
     safe_remove_dir "$CHOICE_DIR/temp" "Choice 临时目录"
@@ -472,8 +492,8 @@ if [ -d "$CHOICE_DIR" ]; then
 fi
 echo ""
 
-# 16. MathWorks 日志与本地作业缓存
-print_info "16. MathWorks 日志与本地作业缓存"
+# 18. MathWorks 日志与本地作业缓存
+print_info "18. MathWorks 日志与本地作业缓存"
 MATHWORKS_DIR="$HOME/Library/Application Support/MathWorks"
 if [ -d "$MATHWORKS_DIR" ]; then
     safe_remove_dir "$MATHWORKS_DIR/ServiceHost/logs" "MathWorks ServiceHost 日志"
@@ -488,8 +508,8 @@ echo -e "\n${BLUE}${SECTION_BAR}${NC}"
 echo -e "${BLUE}  第三部分: 开发工具清理${NC}"
 echo -e "${BLUE}${SECTION_BAR}${NC}\n"
 
-# 17. Safari 浏览器缓存
-print_info "17. Safari 浏览器缓存"
+# 19. Safari 浏览器缓存
+print_info "19. Safari 浏览器缓存"
 SAFARI_CACHE="$HOME/Library/Caches/com.apple.Safari"
 SAFARI_WEBKIT="$HOME/Library/Caches/com.apple.WebKit.WebContent"
 SAFARI_FS="$HOME/Library/Safari/LocalStorage"
@@ -569,8 +589,8 @@ if [ -d "$IOS_BACKUP" ]; then
 fi
 echo ""
 
-# 18. 不活跃项目的 node_modules
-print_info "18. 不活跃项目的 node_modules"
+# 20. 不活跃项目的 node_modules
+print_info "20. 不活跃项目的 node_modules"
 print_warning "以下 node_modules 可以清理，需要时用 npm install 重新安装"
 echo ""
 NODE_MODULES_TOTAL=0
@@ -595,8 +615,8 @@ if [ "$NODE_MODULES_TOTAL" -gt 0 ]; then
 fi
 echo ""
 
-# 20. __pycache__ 目录
-print_info "20. Python __pycache__ 缓存"
+# 22. __pycache__ 目录
+print_info "22. Python __pycache__ 缓存"
 PYCACHE_COUNT=$(find "$HOME" -maxdepth 6 -name "__pycache__" -type d 2>/dev/null | wc -l | tr -d ' ')
 if [ "$PYCACHE_COUNT" -gt 0 ]; then
     echo -e "  找到 ${CYAN}$PYCACHE_COUNT${NC} 个 __pycache__ 目录"
@@ -616,8 +636,8 @@ echo -e "\n${RED}${SECTION_BAR}${NC}"
 echo -e "${RED}  第四部分: 系统级清理（需要管理员密码）${NC}"
 echo -e "${RED}${SECTION_BAR}${NC}\n"
 
-# 23. 系统诊断日志（2.7GB）
-print_info "23. 系统诊断日志 (/private/var/db/diagnostics)"
+# 25. 系统诊断日志（2.7GB）
+print_info "25. 系统诊断日志 (/private/var/db/diagnostics)"
 if [ -d "/private/var/db/diagnostics" ]; then
     size=$(du -sk /private/var/db/diagnostics 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统诊断日志${NC}: $(format_size $size)"
@@ -636,8 +656,8 @@ if [ -d "/private/var/db/diagnostics" ]; then
 fi
 echo ""
 
-# 24. 系统日志
-print_info "24. 系统日志 (/private/var/log)"
+# 26. 系统日志
+print_info "26. 系统日志 (/private/var/log)"
 if [ -d "/private/var/log" ]; then
     size=$(du -sk /private/var/log 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统日志${NC}: $(format_size $size)"
@@ -653,8 +673,8 @@ if [ -d "/private/var/log" ]; then
 fi
 echo ""
 
-# 25. 临时文件夹（已排除 ask-continue-ports）
-print_info "25. 系统临时文件 (/private/var/folders)"
+# 27. 临时文件夹（已排除 ask-continue-ports）
+print_info "27. 系统临时文件 (/private/var/folders)"
 if [ -d "/private/var/folders" ]; then
     size=$(du -sk /private/var/folders 2>/dev/null | awk '{print $1 * 1024}')
     echo -e "  ${CYAN}系统临时文件${NC}: $(format_size $size)"
@@ -674,6 +694,58 @@ if [ -d "/private/var/folders" ]; then
     else
         print_info "  已跳过"
     fi
+fi
+echo ""
+
+# 28. /private/var/folders 定向垃圾清理
+print_info "28. /private/var/folders 定向垃圾清理"
+print_warning "只清理 3 天以上、已识别为可重复生成的临时克隆、memmap 和构建缓存"
+TARGET_PATHS=()
+while IFS= read -r path; do TARGET_PATHS+=("$path"); done < <(find /private/var/folders -path "*/X/com.google.Chrome.code_sign_clone" -mtime +3 2>/dev/null)
+while IFS= read -r path; do TARGET_PATHS+=("$path"); done < <(find /private/var/folders -path "*/T/joblib_memmapping_folder_*" -mtime +3 2>/dev/null)
+while IFS= read -r path; do TARGET_PATHS+=("$path"); done < <(find /private/var/folders -path "*/T/node-gyp-tmp-*" -mtime +3 2>/dev/null)
+while IFS= read -r path; do TARGET_PATHS+=("$path"); done < <(find /private/var/folders -path "*/T/node-compile-cache" -mtime +3 2>/dev/null)
+
+TARGET_TOTAL=0
+for path in "${TARGET_PATHS[@]}"; do
+    if [ -e "$path" ]; then
+        size=$(get_size_bytes "$path")
+        if [ "$size" -gt 0 ]; then
+            echo -e "  ${CYAN}$path${NC}: $(format_size $size)"
+            TARGET_TOTAL=$((TARGET_TOTAL + size))
+        fi
+    fi
+done
+
+RECENT_COUNT=0
+while IFS= read -r _; do
+    RECENT_COUNT=$((RECENT_COUNT + 1))
+done < <(
+    find /private/var/folders \( -path "*/X/com.google.Chrome.code_sign_clone" \
+        -o -path "*/T/joblib_memmapping_folder_*" \
+        -o -path "*/T/node-gyp-tmp-*" \
+        -o -path "*/T/node-compile-cache" \) -mtime -3 2>/dev/null
+)
+
+if [ "$RECENT_COUNT" -gt 0 ] 2>/dev/null; then
+    print_info "  检测到 $RECENT_COUNT 个近期仍在活跃的临时目录，出于安全未纳入本次清理"
+fi
+
+if [ "$TARGET_TOTAL" -gt 0 ]; then
+    echo -e "  ${CYAN}合计${NC}: $(format_size $TARGET_TOTAL)"
+    if confirm "  清理这些陈旧定向临时垃圾？"; then
+        for path in "${TARGET_PATHS[@]}"; do
+            if [ -e "$path" ]; then
+                rm -rf "$path" 2>/dev/null || sudo rm -rf "$path" 2>/dev/null
+            fi
+        done
+        TOTAL_FREED=$((TOTAL_FREED + TARGET_TOTAL))
+        print_success "  定向临时垃圾已清理"
+    else
+        print_info "  已跳过"
+    fi
+else
+    print_info "  未检测到可清理的陈旧定向临时垃圾"
 fi
 echo ""
 
