@@ -1,47 +1,85 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=for-the-badge" alt="Platform"/>
-  <img src="https://img.shields.io/badge/Shell-Bash%20%7C%20PowerShell-green?style=for-the-badge" alt="Shell"/>
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License"/>
-</p>
+# Windsurf Fix Tool
 
-<h1 align="center">🌊 Windsurf Fix Tool</h1>
+![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=for-the-badge)
+![Shell](https://img.shields.io/badge/Shell-Bash%20%7C%20PowerShell-green?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
-<p align="center">
-  <strong>A cross-platform troubleshooting toolkit for Windsurf IDE</strong>
-  <br/>
-  Fix startup lag, shell connection issues, MCP loading problems and more
-</p>
+A cross-platform troubleshooting toolkit for Windsurf IDE, focused on startup
+lag, shell issues, MCP loading failures, oversized runtime caches, and AI tool
+cleanup.
 
-<p align="center">
-  <a href="./README.md">🇨🇳 中文</a> | <a href="./README.en.md">🇺🇸 English</a>
-</p>
+[中文](./README.md) | [English](./README.en.md)
 
-## ✨ Features
+## What This Repository Focuses On
 
-| Feature | Description | Clears History |
-|---------|-------------|----------------|
-| 🚀 **Startup Cache Cleanup** | Fix slow startup by clearing GPU/Code cache | ❌ No |
-| 🔧 **Extension Cache Cleanup** | Resolve extension loading issues | ❌ No |
-| 🔌 **MCP Diagnostics** | Diagnose and fix MCP auto-loading problems | ❌ No |
-| 💬 **Cascade Cache Cleanup** | Fix startup failures (last resort) | ⚠️ Yes |
-| 🖥️ **Terminal Fixes** | Resolve shell connection and stuck sessions | ❌ No |
-| 📊 **Diagnostic Reports** | Generate system info for troubleshooting | ❌ No |
-| 🧹 **Dev Tool Cache Cleanup** | Clean npm/pip/Homebrew/Maven/Gradle caches | ❌ No |
-| 🗑️ **System Cache Cleanup** | Clean logs/trash/old backups/DNS cache | ❌ No |
-| 📈 **Disk Usage Analysis** | Analyze disk usage, locate large files and caches | ❌ No |
+- Safe cleanup first: fix lag without forcing sign-in again.
+- Separate scripts for macOS, Linux, and Windows.
+- Clear risk boundaries for chat history, login state, extensions, and MCP config.
+- Practical remediation for terminal issues, MCP diagnostics, and system cache
+  cleanup.
 
-## 🖥️ Supported Platforms
+## Verified Cleanup Boundaries
 
-| Platform | Script | Usage |
-|----------|--------|-------|
-| macOS | `fix-windsurf-mac.sh` | `./fix-windsurf-mac.sh` |
-| Linux | `fix-windsurf-linux.sh` | `./fix-windsurf-linux.sh` |
-| Windows | `fix-windsurf-win.ps1` | Run in PowerShell (Admin) |
-| macOS System Cleanup | `macos-safe-cleanup.sh` | `./macos-safe-cleanup.sh` |
+The current guidance is based on local inspection, Windsurf troubleshooting
+docs, Electron storage behavior, and official PowerShell encoding guidance.
 
-## 🚀 Quick Start
+- Best first target for lag:
+  `CachedData`
+  This is the highest-value rebuildable runtime cache.
+- Secondary runtime caches:
+  `Cache`, `GPUCache`, `Code Cache`, `Dawn*Cache`, and `logs`
+  These are usually safe to rebuild.
+- Extension package cache:
+  `CachedExtensionVSIXs`
+  Safe by default and does not uninstall installed extensions.
+- Local backup state:
+  `User/globalStorage/state.vscdb.backup`
+  Usually safe, but it removes local backup state.
+- Login or session related stores:
+  `IndexedDB`, `WebStorage`, `Local Storage`, `Session Storage`,
+  `Service Worker`
+  Avoid these by default because they are closer to persistent site data.
+- Cascade history:
+  `~/.codeium/windsurf/cascade`
+  Avoid by default because it removes local Cascade history.
+- MCP config:
+  `~/.codeium/windsurf/mcp_config.json`
+  Reset only when MCP config itself is broken.
 
-### macOS
+## Feature Matrix
+
+- macOS:
+  `fix-windsurf-mac.sh`
+  Includes startup cache cleanup, deep runtime cleanup, MCP diagnostics,
+  terminal fixes, ID reset, and AI tool cleanup.
+- Linux:
+  `fix-windsurf-linux.sh`
+  Includes startup cache cleanup, `chrome-sandbox` repair, systemd OSC
+  troubleshooting, MCP diagnostics, and ID reset.
+- Windows:
+  `fix-windsurf-win.ps1`
+  Includes startup cache cleanup, execution policy repair, update and network
+  checks, deep runtime cleanup, and ID reset.
+- macOS system cleanup:
+  `macos-safe-cleanup.sh`
+  Handles risk-tiered cleanup for system caches, dev-tool caches, Windsurf
+  runtime caches, and common app caches.
+
+## Repository Layout
+
+| File | Purpose |
+| --- | --- |
+| `fix-windsurf-mac.sh` | Main macOS repair script |
+| `fix-windsurf-linux.sh` | Main Linux repair script |
+| `fix-windsurf-win.ps1` | Main Windows repair script |
+| `fix-windsurf-win.bat` | Windows launcher for the PowerShell version |
+| `macos-safe-cleanup.sh` | macOS system and developer cache cleanup script |
+| `README.md` | Chinese documentation |
+| `README.en.md` | English documentation |
+
+## Quick Start
+
+### macOS Launch
 
 ```bash
 git clone https://github.com/1837620622/windsurf-fix-tool.git
@@ -50,7 +88,7 @@ chmod +x fix-windsurf-mac.sh
 ./fix-windsurf-mac.sh
 ```
 
-### Linux
+### Linux Launch
 
 ```bash
 git clone https://github.com/1837620622/windsurf-fix-tool.git
@@ -59,7 +97,7 @@ chmod +x fix-windsurf-linux.sh
 ./fix-windsurf-linux.sh
 ```
 
-### Windows
+### Windows Launch
 
 ```powershell
 git clone https://github.com/1837620622/windsurf-fix-tool.git
@@ -68,7 +106,10 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\fix-windsurf-win.ps1
 ```
 
-**Encoding note:** `fix-windsurf-win.ps1` is stored as `UTF-8 with BOM` for better compatibility with Windows PowerShell 5.1 when Chinese text is present. `GBK` is not recommended because it depends on the local system code page and is less reliable across GitHub, VS Code, and cross-platform environments.
+`fix-windsurf-win.ps1` is stored as `UTF-8 with BOM` for compatibility with
+Windows PowerShell 5.1 when Chinese text is present. `GBK` is not recommended
+because it depends on the local system code page and is less reliable across
+GitHub, VS Code, and cross-platform environments.
 
 ### macOS System Cleanup
 
@@ -79,16 +120,21 @@ chmod +x macos-safe-cleanup.sh
 ./macos-safe-cleanup.sh
 ```
 
-## 📋 Common Issues & Solutions
+## Recommended Cleanup Order
 
-### 1. Slow Startup / Lag
+1. Start with the built-in startup cache cleanup and target `CachedData` first.
+2. If lag remains, also clean `Cache`, `GPUCache`, `Code Cache`,
+   `DawnWebGPUCache`, `DawnGraphiteCache`, and old logs.
+3. Clean `CachedExtensionVSIXs` only when extension package cache is suspected.
+4. Use deep runtime cleanup when you want a stronger reset without touching chat
+   history or login-related storage.
+5. Treat `cascade` cleanup as a last resort for severe startup failures.
 
-**Recommended:** Run "Clean Startup Cache" (Option 2)
+## Manual Cleanup Commands
 
-This clears GPU cache, code cache, and extension cache **without** affecting your conversation history.
+### macOS
 
 ```bash
-# Manual cleanup (macOS)
 rm -rf ~/Library/Application\ Support/Windsurf/CachedData
 rm -rf ~/Library/Application\ Support/Windsurf/Cache
 rm -rf ~/Library/Application\ Support/Windsurf/GPUCache
@@ -96,8 +142,11 @@ rm -rf ~/Library/Application\ Support/Windsurf/Code\ Cache
 rm -rf ~/Library/Application\ Support/Windsurf/DawnWebGPUCache
 rm -rf ~/Library/Application\ Support/Windsurf/DawnGraphiteCache
 rm -rf ~/Library/Application\ Support/Windsurf/CachedExtensionVSIXs
+```
 
-# Manual cleanup (Linux)
+### Linux
+
+```bash
 rm -rf ~/.config/Windsurf/CachedData
 rm -rf ~/.config/Windsurf/Cache
 rm -rf ~/.config/Windsurf/GPUCache
@@ -107,8 +156,9 @@ rm -rf ~/.config/Windsurf/DawnGraphiteCache
 rm -rf ~/.config/Windsurf/CachedExtensionVSIXs
 ```
 
+### Windows
+
 ```powershell
-# Manual cleanup (Windows PowerShell)
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedData"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\Cache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\GPUCache"
@@ -118,136 +168,121 @@ Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\DawnGraphiteCache"
 Remove-Item -Recurse -Force "$env:APPDATA\Windsurf\CachedExtensionVSIXs"
 ```
 
-Avoid cleaning these folders by default:
+## Folders To Avoid Cleaning By Default
+
 - `IndexedDB`
 - `WebStorage`
 - `Local Storage`
 - `Session Storage`
 - `Service Worker`
 
-These locations are closer to Electron persistent site and session data, so clearing them may require logging in again for some embedded services.
+These locations are closer to persistent site and session data in Electron, so
+cleaning them may require signing in again for embedded Windsurf services.
 
-### 2. MCP Not Auto-Loading
+## Common Issues
 
-**Diagnosis Steps:**
-1. Click MCPs icon in Windsurf and refresh manually
-2. Check `~/.codeium/windsurf/mcp_config.json` for JSON errors
-3. Ensure Node.js/npx is installed
-4. Verify environment variables (API keys)
+### 1. Startup lag
 
-### 3. Terminal Session Stuck
+Start with `CachedData`, then move to `Cache`, `GPUCache`, `Code Cache`,
+`Dawn*Cache`, and old logs.
 
-**Causes:** Complex zsh themes (Oh My Zsh, Powerlevel10k) can interfere with Cascade
+### 2. Will this delete Cascade history
 
-**Solutions:**
-- Temporarily disable theme in `~/.zshrc`
-- Create a minimal shell config for Windsurf
-- Enable Legacy Terminal in settings
+No. Startup cache cleanup, extension cache cleanup, and deep runtime cleanup do
+not touch `~/.codeium/windsurf/cascade`. Only the explicit Cascade cleanup
+option removes it.
 
-### 4. Shell Connection Failed
+### 3. Will this uninstall extensions
 
-Add to your `settings.json`:
+No. The default cleanup only removes `CachedExtensionVSIXs`, which is an
+installer cache, not the installed extension itself.
 
-```json
-"terminal.integrated.defaultProfile.osx": "zsh"
-```
+### 4. MCP does not auto-load
 
-### 5. "Windsurf is Damaged" (macOS)
+Check:
+
+1. Whether `~/.codeium/windsurf/mcp_config.json` is valid JSON.
+2. Whether Node.js, Python, and `npx` are installed.
+3. Whether required environment variables are present.
+4. Whether Windsurf logs show MCP launch errors.
+
+### 5. Terminal session gets stuck
+
+Common causes include heavy `zsh` themes, `Oh My Zsh`, `Powerlevel10k`, or
+Linux systemd OSC terminal context tracking.
+
+### 6. “Windsurf is damaged” on macOS
+
+Make sure the app is in `/Applications`, matches your chip architecture, then
+run:
 
 ```bash
 xattr -c "/Applications/Windsurf.app/"
 ```
 
-### 6. Silent Crash on Launch (Linux)
+### 7. Silent crash on Linux
+
+This often comes from broken `chrome-sandbox` permissions:
 
 ```bash
 sudo chown root:root /path/to/windsurf/chrome-sandbox
 sudo chmod 4755 /path/to/windsurf/chrome-sandbox
 ```
 
-### 7. Dev Tool Cache Cleanup
+### 8. Chinese output is garbled on Windows
 
-Supports cleaning caches for: npm, pip, Homebrew, apt/yum/dnf, uv, Maven, Gradle, Yarn, pnpm, NuGet, Selenium/WebDriver, Go modules, Cargo/Rust, conda, CocoaPods, Xcode DerivedData, Docker.
+The PowerShell script is stored as `UTF-8 with BOM` and sets both input and
+output encoding to UTF-8 at runtime. Reverting to `GBK` is not recommended.
 
-Run the tool and select "Clean Dev Tool Caches" - supports batch cleanup or item-by-item selection.
+## macOS System Cleanup Script
 
-### 8. System Cache & Junk Cleanup
+`macos-safe-cleanup.sh` is better suited for system-wide and developer-cache
+cleanup. Its current behavior is:
 
-**macOS:** User caches (`~/Library/Caches`), old logs (30+ days), Trash, old Windsurf backups, old diagnostic reports, DNS cache flush.
+- It cleans Windsurf `CachedData`, `Cache`, `GPUCache`, `Code Cache`, and
+  `Dawn*Cache` by default.
+- It only displays the risk of `WebStorage` and keeps it by default.
+- It supports cleanup for Homebrew, npm, pip, Maven, Playwright, Telegram,
+  WeChat, and other large cache locations.
+- Every step is confirmed interactively.
 
-**Linux:** User caches (`~/.cache`), system logs (`/var/log` 30+ days), temp files (`/tmp` 7+ days), systemd journal logs, old Windsurf backups, DNS cache flush.
+## Important Paths
 
-**Windows:** User temp files (`%TEMP%`), Windows temp files (`%SystemRoot%\Temp`, admin required), Recycle Bin, Windows Update cache, old Windsurf backups, old diagnostic reports, DNS cache flush.
+- Conversation history:
+  macOS / Linux use `~/.codeium/windsurf/cascade`;
+  Windows uses `%USERPROFILE%\.codeium\windsurf\cascade`.
+- MCP config:
+  macOS / Linux use `~/.codeium/windsurf/mcp_config.json`;
+  Windows uses `%USERPROFILE%\.codeium\windsurf\mcp_config.json`.
+- macOS runtime cache:
+  `~/Library/Application Support/Windsurf`
+- Linux runtime cache:
+  `~/.config/Windsurf`
+- Windows runtime cache:
+  `%APPDATA%\Windsurf`
 
-### 9. Disk Usage Analysis
+## Network Whitelist
 
-Analyze disk space usage including directory sizes, hidden folder rankings, Library subdirectory rankings (macOS), AppData directory usage (Windows), and app container usage (macOS).
-
-### 10. macOS System Data Cleanup
-
-**Dedicated Script:** `macos-safe-cleanup.sh`
-
-**Features:**
-- **19 cleanup functions** across 4 safety levels (Low/Medium/Dev/System)
-- **Step-by-step confirmation** prompts, skip anytime for safety
-- **Estimated 10-15GB space recovery** optimized for macOS system data
-- **Won't delete:** Applications, chat history, documents, emails, config files
-
-**Major Cleanup Items:**
-- WeChat cache (6.9GB) → Clean in WeChat Settings recommended
-- System diagnostic logs (2.7GB) → Pure logs, safe to delete
-- Photo analysis cache (3.1GB) → System auto-rebuilds after deletion
-- Windsurf CachedData / Cache / GPUCache / Dawn*Cache → Safe by default
-- Windsurf WebStorage (1GB) → May affect login state, preserved by default
-- Telegram cache (1.3GB) → Clean in Telegram Settings recommended
-- Homebrew, npm, Maven dev tool caches
-- User cache directories, temp files, DNS cache
-
-**Usage:**
-```bash
-chmod +x macos-safe-cleanup.sh
-./macos-safe-cleanup.sh
-```
-
-**Safety Levels:**
-- **Low Risk:** Pure caches, system auto-rebuilds
-- **Medium Risk:** App caches, close apps first recommended
-- **Dev Tools:** node_modules, __pycache__, reinstall when needed
-- **System Level:** Requires sudo, cleans system logs and temp files
-
-## 🌐 Network Whitelist
-
-If using firewall/VPN/proxy, whitelist these domains:
+If you are behind a firewall, VPN, proxy, or enterprise network policy, make
+sure these domains are reachable:
 
 - `*.codeium.com`
 - `*.windsurf.com`
 - `*.codeiumdata.com`
 
-## 📁 Important Paths
-
-| Platform | Conversation History | MCP Config |
-|----------|---------------------|------------|
-| macOS/Linux | `~/.codeium/windsurf/cascade` | `~/.codeium/windsurf/mcp_config.json` |
-| Windows | `%USERPROFILE%\.codeium\windsurf\cascade` | `%USERPROFILE%\.codeium\windsurf\mcp_config.json` |
-
-## 📚 References
+## References
 
 - [Official Windsurf Troubleshooting](https://docs.windsurf.com/troubleshooting/windsurf-common-issues)
 - [Windsurf Terminal Documentation](https://docs.windsurf.com/windsurf/terminal)
 - [Windsurf MCP Documentation](https://docs.windsurf.com/windsurf/cascade/mcp)
+- [PowerShell File Encoding Guidance](https://learn.microsoft.com/en-us/powershell/scripting/dev-cross-plat/vscode/understanding-file-encoding?view=powershell-7.5)
 
-## ⚠️ Disclaimer
+## Author
 
-This tool is based on official Windsurf documentation. Please backup important data before use. Clearing Cascade cache will delete conversation history.
+- WeChat: `1837620622` (传康Kk)
+- Email: `2040168455@qq.com`
+- Xianyu / Bilibili: `万能程序员`
 
-## 📄 License
+## License
 
-MIT License - Feel free to use, modify, and distribute.
-
-## 🤝 Contributing
-
-Issues and Pull Requests are welcome!
-
-## ⭐ Star History
-
-If this tool helped you, please give it a star! ⭐
+MIT
