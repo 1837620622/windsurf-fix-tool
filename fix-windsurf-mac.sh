@@ -63,6 +63,29 @@ print_header() {
     echo -e "${CYAN}  github.com/1837620622/windsurf-fix-tool${NC}"
     echo -e "${CYAN}========================================${NC}"
     echo ""
+    # ── 运行模式提示 ─────────────────────────────────────────────────
+    if [ "${FORCE_RESET_ID:-1}" = "0" ] || [ "${FORCE_RESET_ID:-1}" = "false" ]; then
+        echo -e "${GREEN}[当前模式] 保守模式${NC}（FORCE_RESET_ID=0）——清理不重置设备 ID，保留登录态"
+    else
+        echo -e "${RED}[当前模式] 强制重置模式${NC}（默认）——所有清理菜单完成后自动重置 Windsurf 设备 ID"
+        echo -e "  ${YELLOW}⚠ 重置后 Windsurf 会被识别为新设备，可能需要重新登录一次${NC}"
+        echo -e "  ${YELLOW}⚠ 用途：绕过限速、刷新免费额度、解决服务端缓存异常${NC}"
+        echo -e "  如需关闭强制重置：${CYAN}FORCE_RESET_ID=0 bash fix-windsurf-mac.sh${NC}"
+    fi
+    echo ""
+    echo -e "${GREEN}[始终保留]${NC} 对话和用户数据，任何模式下都不会被清理："
+    echo -e "  • ${CYAN}~/.codeium/windsurf/cascade/*.pb${NC}            对话历史"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/memories/${NC}                 用户记忆"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/skills/${NC}                   技能"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/mcp_config.json${NC}          MCP 配置"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/user_settings.pb${NC}          用户偏好"
+    echo -e "  • ${CYAN}Application Support/Windsurf/User/settings.json${NC}  编辑器设置"
+    echo ""
+    echo -e "${RED}[清理后会被强制重置]${NC} 仅在强制重置模式下（默认）："
+    echo -e "  • ${CYAN}installation_id${NC}                              Windsurf 安装标识"
+    echo -e "  • ${CYAN}machineid${NC}                                    机器标识"
+    echo -e "  • ${CYAN}storage.json${NC} 中的 telemetry.devDeviceId/macMachineId/machineId/sqmId"
+    echo ""
 }
 
 print_info() {
@@ -167,6 +190,9 @@ clean_cascade_cache() {
         # 删除
         rm -rf "$CASCADE_DIR"
         print_success "Cascade 缓存已清理"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为，FORCE_RESET_ID=0 可关闭）
+        auto_reset_after_clean
     else
         print_info "已取消操作"
     fi
@@ -199,6 +225,9 @@ clean_extension_cache() {
         fi
 
         print_success "扩展缓存清理完成"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        auto_reset_after_clean
     else
         print_info "已取消操作"
     fi
@@ -510,6 +539,10 @@ full_repair() {
         if ! check_windsurf_running; then
             return 1
         fi
+        # 标记批量模式：子函数跳过各自的 auto_reset_after_clean
+        _IN_BATCH_REPAIR=1
+        export _IN_BATCH_REPAIR
+
         clean_cascade_cache
         clean_extension_cache
         clean_startup_cache
@@ -518,9 +551,16 @@ full_repair() {
         configure_terminal_settings
         detect_zsh_theme_conflicts
         generate_diagnostic_report
-        
+
+        # 退出批量模式，末尾统一重置一次
+        _IN_BATCH_REPAIR=0
+        export _IN_BATCH_REPAIR
+
         echo ""
         print_success "完整修复已完成！"
+
+        # 统一在完整修复末尾执行一次强制重置
+        auto_reset_after_clean
         print_info "请重新启动 Windsurf"
     else
         print_info "已取消操作"
@@ -1070,6 +1110,9 @@ clean_ai_tool_garbage() {
     if [ "$DID_CLEAN" -eq 1 ] 2>/dev/null; then
         print_success "四个 AI 工具垃圾缓存清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
         print_info "核心配置、MCP、登录认证、skills、history 和正式数据库均已保留"
+
+        # 清理完毕 -> 强制重置 Windsurf 设备 ID（默认行为）
+        auto_reset_after_clean
     else
         print_info "未执行任何清理操作"
     fi
@@ -1444,10 +1487,64 @@ except Exception:
     pass
 PYEOF
     fi
-    
-    print_success "Windsurf ID 已自动重置"
+
+    # 【关键补强】重置 state.vscdb 的 ItemTable 中的 telemetry 键
+    # 参考：cursor-free-vip、ai-auto-free 等社区方案
+    # VSCode/Windsurf 的 globalStorage 不仅在 storage.json 中记录 telemetry，还在 state.vscdb 的 ItemTable 里镜像了一份
+    # 只改 storage.json 的话，启动后可能从 state.vscdb 读回旧值
+    STATE_DB="$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb"
+    if [ -f "$STATE_DB" ] && command -v sqlite3 &>/dev/null; then
+        # value 列存的是 JSON 字符串形式的值，需要把 UUID 用双引号包裹
+        sqlite3 "$STATE_DB" <<SQLEOF 2>/dev/null
+UPDATE ItemTable SET value = '"$NEW_TELEMETRY_MACHINE_ID"' WHERE key = 'telemetry.machineId';
+UPDATE ItemTable SET value = '"$NEW_DEV_DEVICE_ID"' WHERE key = 'telemetry.devDeviceId';
+UPDATE ItemTable SET value = '"$NEW_SQM_ID"' WHERE key = 'telemetry.sqmId';
+UPDATE ItemTable SET value = '"$NEW_MAC_MACHINE_ID"' WHERE key = 'telemetry.macMachineId';
+UPDATE ItemTable SET value = '"$NEW_INSTALL_ID"' WHERE key = 'storage.serviceMachineId';
+SQLEOF
+    fi
+
+    print_success "Windsurf ID 已自动重置（含 storage.json + state.vscdb 同步）"
     echo -e "  installation_id: ${GREEN}$NEW_INSTALL_ID${NC}"
     echo -e "  machineid:       ${GREEN}$NEW_MACHINE_ID${NC}"
+    echo -e "  telemetry.*:     ${GREEN}已同步到 storage.json 和 state.vscdb${NC}"
+}
+
+# ----------------------------------------------------------------------------
+# 内部函数: 清理流程末尾统一调用的"强制重置设备 ID"入口
+# 触发时机：菜单 1/2/3/18/20/21/23/24 任一清理类操作完成后
+# 默认行为：强制重置（用户要求，用于绕过限速、刷新会话、伪装新设备）
+# 逃生通道：执行前设置环境变量 FORCE_RESET_ID=0 即可完全跳过
+#   例：FORCE_RESET_ID=0 bash fix-windsurf-mac.sh
+# ----------------------------------------------------------------------------
+auto_reset_after_clean() {
+    # 用户主动关闭？
+    if [ "${FORCE_RESET_ID:-1}" = "0" ] || [ "${FORCE_RESET_ID:-1}" = "false" ]; then
+        print_info "已跳过设备 ID 重置（FORCE_RESET_ID=0）"
+        return 0
+    fi
+
+    # full_repair 等批量流程中：子函数跳过，末尾统一重置一次
+    if [ "${_IN_BATCH_REPAIR:-0}" = "1" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}================ 清理后强制重置 Windsurf 设备 ID ================${NC}"
+    print_warning "此为用户默认行为：每次清理完成后自动重置设备标识"
+    print_warning "预期影响：Windsurf 服务端会识别为新设备，可能需要重新登录一次"
+    print_info   "如需关闭此行为：下次运行前加 FORCE_RESET_ID=0 bash fix-windsurf-mac.sh"
+    echo ""
+
+    # 关闭 Windsurf 才能可靠重置 storage.json
+    if pgrep -f "Windsurf" &>/dev/null; then
+        print_warning "检测到 Windsurf 正在运行，建议先关闭再重置，以免 storage.json 被覆盖"
+        print_info "将等待 3 秒后继续（Ctrl+C 可取消）..."
+        sleep 3
+    fi
+
+    reset_windsurf_id_auto
+    echo -e "${CYAN}================================================================${NC}"
 }
 
 reset_windsurf_id() {
@@ -1692,85 +1789,136 @@ deep_clean_runtime_cache() {
     clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot"                      "清理 /tmp 终端快照"
     clean_glob_with_stats "$HOME/.zcompdump*"                                       "清理 Zsh 自动补全缓存（解决终端卡顿）"
 
-    # ── state.vscdb VACUUM 优化（不删除文件，仅压缩SQLite数据库碎片） ──────
+    # ── IndexedDB / Service Worker / blob_storage 安全清理 ────────────────
+    # 重要说明：
+    #   1. IndexedDB 在 Windsurf 中存的是 VSCode webview 的 UI 状态（Cascade 面板滚动/折叠、编辑器 Tab 状态），
+    #      不是登录凭证。登录凭证位于 Cookies/Local Storage/WebStorage 以及 ~/.codeium/windsurf/installation_id。
+    #      清理 IndexedDB 后重启 Windsurf 仍保持登录，只会重置 Cascade 面板的 UI 排版。
+    #   2. Service Worker/CacheStorage 与 ScriptCache 是 Chromium Service Worker 的静态资源缓存，
+    #      与登录态无关，清理后会在下一次启动自动重建。
+    #   3. blob_storage 是临时 blob 对象缓存，与登录无关。
+    #   4. 对话历史存于 ~/.codeium/windsurf/cascade/*.pb，与以上目录完全独立。
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/IndexedDB/*"                      "清理 IndexedDB（Cascade UI 状态，不影响登录和对话）"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*"    "清理 Service Worker CacheStorage（静态资源缓存）"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*"     "清理 Service Worker ScriptCache（脚本缓存）"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/blob_storage/*"                   "清理 blob_storage（临时 Blob 对象缓存）"
+
+    # ── state.vscdb VACUUM 优化（不删除文件，仅压缩 SQLite 数据库碎片） ──────
+    # 根因：Cascade 面板的快速操作会持续写入 state.vscdb，如果不 VACUUM，
+    #       表内删除后的行会变为"碎片页"残留，文件持续膨胀（官方 issue 实测可从 298MB 压到 639KB）。
+    #       这是对话长后切换/启动变慢的主因之一。
+    echo ""
+    print_info "VACUUM 全局 state.vscdb 数据库（保留全部数据，只压缩碎片）..."
     STATE_DB="$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb"
     if [ -f "$STATE_DB" ]; then
-        echo ""
-        print_info "优化 state.vscdb 数据库（VACUUM，不删除数据）..."
         BEFORE_KB=$(du -sk "$STATE_DB" 2>/dev/null | awk '{print $1}')
         BEFORE_KB=${BEFORE_KB:-0}
-        print_info "优化前大小: $(format_kb_size "$BEFORE_KB")"
+        print_info "  优化前大小: $(format_kb_size "$BEFORE_KB")"
         if command -v sqlite3 &> /dev/null; then
             sqlite3 "$STATE_DB" "VACUUM;" 2>/dev/null && \
-                print_success "VACUUM 完成" || \
-                print_warning "VACUUM 失败（文件可能被占用）"
+                print_success "  全局 VACUUM 完成" || \
+                print_warning "  全局 VACUUM 失败（文件可能被占用，请先关闭 Windsurf）"
             AFTER_KB=$(du -sk "$STATE_DB" 2>/dev/null | awk '{print $1}')
             AFTER_KB=${AFTER_KB:-0}
             RELEASED_KB=$((BEFORE_KB - AFTER_KB))
             if [ "$RELEASED_KB" -lt 0 ]; then RELEASED_KB=0; fi
             TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + RELEASED_KB))
-            print_success "优化后大小: $(format_kb_size "$AFTER_KB")，释放: $(format_kb_size "$RELEASED_KB")"
+            print_success "  优化后大小: $(format_kb_size "$AFTER_KB")，释放: $(format_kb_size "$RELEASED_KB")"
         else
-            print_warning "未找到 sqlite3 命令，跳过 VACUUM 优化"
+            print_warning "  未找到 sqlite3 命令，跳过 VACUUM"
         fi
+    else
+        print_info "  全局 state.vscdb 不存在，跳过"
     fi
 
-    INDEXEDDB_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/IndexedDB")
+    # ── workspaceStorage 下所有工作区 state.vscdb 的批量 VACUUM ─────────────
+    # 这是长对话卡顿的另一个常见元凶：每个工作区都有独立的 state.vscdb，都会积累碎片。
+    # 只做 VACUUM 压缩，不删除工作区数据，保留你的"最近打开文件"、"断点"等工作区状态。
+    echo ""
+    print_info "VACUUM 所有工作区 state.vscdb（保留工作区状态，只压缩碎片）..."
+    if command -v sqlite3 &> /dev/null; then
+        WS_VACUUM_COUNT=0
+        WS_VACUUM_RELEASED_KB=0
+        WORKSPACE_STORAGE_DIR="$WINDSURF_SUPPORT_DIR/User/workspaceStorage"
+        if [ -d "$WORKSPACE_STORAGE_DIR" ]; then
+            while IFS= read -r ws_db; do
+                if [ -f "$ws_db" ]; then
+                    WS_BEFORE_KB=$(du -sk "$ws_db" 2>/dev/null | awk '{print $1}')
+                    WS_BEFORE_KB=${WS_BEFORE_KB:-0}
+                    if sqlite3 "$ws_db" "VACUUM;" 2>/dev/null; then
+                        WS_AFTER_KB=$(du -sk "$ws_db" 2>/dev/null | awk '{print $1}')
+                        WS_AFTER_KB=${WS_AFTER_KB:-0}
+                        WS_DIFF_KB=$((WS_BEFORE_KB - WS_AFTER_KB))
+                        if [ "$WS_DIFF_KB" -lt 0 ]; then WS_DIFF_KB=0; fi
+                        WS_VACUUM_RELEASED_KB=$((WS_VACUUM_RELEASED_KB + WS_DIFF_KB))
+                        WS_VACUUM_COUNT=$((WS_VACUUM_COUNT + 1))
+                    fi
+                fi
+            done < <(find "$WORKSPACE_STORAGE_DIR" -maxdepth 2 -name "state.vscdb" -type f 2>/dev/null)
+            TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + WS_VACUUM_RELEASED_KB))
+            print_success "  已 VACUUM $WS_VACUUM_COUNT 个工作区 state.vscdb，释放: $(format_kb_size "$WS_VACUUM_RELEASED_KB")"
+        else
+            print_info "  workspaceStorage 目录不存在，跳过"
+        fi
+    else
+        print_warning "  未找到 sqlite3 命令，跳过工作区 VACUUM"
+    fi
+
+    # ── 登录态高风险存储（默认保留，不在第一阶段清理） ─────────────────────
+    # 真正的登录相关存储：Cookies、Local Storage、WebStorage、Session Storage、
+    # Network Persistent State、TransportSecurity、DIPS、SharedStorage、Trust Tokens
     WEBSTORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/WebStorage")
     LOCAL_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Local Storage")
     SESSION_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Session Storage")
-    SERVICE_WORKER_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Service Worker")
     COOKIES_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Cookies")
     NETWORK_STATE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Network Persistent State")
     DIPS_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/DIPS")
     SHARED_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/SharedStorage")
     TRUST_TOKENS_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Trust Tokens")
-    RISKY_TOTAL_KB=$((INDEXEDDB_KB + WEBSTORAGE_KB + LOCAL_STORAGE_KB + SESSION_STORAGE_KB + SERVICE_WORKER_KB + COOKIES_KB + NETWORK_STATE_KB + DIPS_KB + SHARED_STORAGE_KB + TRUST_TOKENS_KB))
+    RISKY_TOTAL_KB=$((WEBSTORAGE_KB + LOCAL_STORAGE_KB + SESSION_STORAGE_KB + COOKIES_KB + NETWORK_STATE_KB + DIPS_KB + SHARED_STORAGE_KB + TRUST_TOKENS_KB))
 
     if [ "$AUTO_CONFIRM" != "--auto" ] && [ "$RISKY_TOTAL_KB" -gt 0 ] 2>/dev/null; then
         echo ""
-        print_warning "仍检测到 $(format_kb_size "$RISKY_TOTAL_KB") 的高风险会话存储未清理"
-        echo "  继续清理会更彻底，但可能导致 Windsurf 内嵌网页服务重新登录"
-        [ "$INDEXEDDB_KB" -gt 0 ] && echo "  IndexedDB -> $(format_kb_size "$INDEXEDDB_KB")"
-        [ "$WEBSTORAGE_KB" -gt 0 ] && echo "  WebStorage -> $(format_kb_size "$WEBSTORAGE_KB")"
-        [ "$LOCAL_STORAGE_KB" -gt 0 ] && echo "  Local Storage -> $(format_kb_size "$LOCAL_STORAGE_KB")"
-        [ "$SESSION_STORAGE_KB" -gt 0 ] && echo "  Session Storage -> $(format_kb_size "$SESSION_STORAGE_KB")"
-        [ "$SERVICE_WORKER_KB" -gt 0 ] && echo "  Service Worker -> $(format_kb_size "$SERVICE_WORKER_KB")"
-        [ "$COOKIES_KB" -gt 0 ] && echo "  Cookies -> $(format_kb_size "$COOKIES_KB")"
-        echo -ne ${YELLOW}是否继续执行第二阶段高风险清理？[y/N]: ${NC}
+        print_warning "默认已保留 $(format_kb_size "$RISKY_TOTAL_KB") 的登录态相关存储"
+        echo -e "  ${CYAN}[仅供参考] 如需彻底清理（会强制重新登录 Windsurf）才选 y:${NC}"
+        [ "$COOKIES_KB" -gt 0 ]        && echo "    Cookies -> $(format_kb_size "$COOKIES_KB")"
+        [ "$LOCAL_STORAGE_KB" -gt 0 ]  && echo "    Local Storage -> $(format_kb_size "$LOCAL_STORAGE_KB")"
+        [ "$WEBSTORAGE_KB" -gt 0 ]     && echo "    WebStorage -> $(format_kb_size "$WEBSTORAGE_KB")"
+        [ "$SESSION_STORAGE_KB" -gt 0 ] && echo "    Session Storage -> $(format_kb_size "$SESSION_STORAGE_KB")"
+        [ "$NETWORK_STATE_KB" -gt 0 ]  && echo "    Network Persistent State -> $(format_kb_size "$NETWORK_STATE_KB")"
+        [ "$DIPS_KB" -gt 0 ]           && echo "    DIPS -> $(format_kb_size "$DIPS_KB")"
+        [ "$SHARED_STORAGE_KB" -gt 0 ] && echo "    SharedStorage -> $(format_kb_size "$SHARED_STORAGE_KB")"
+        [ "$TRUST_TOKENS_KB" -gt 0 ]   && echo "    Trust Tokens -> $(format_kb_size "$TRUST_TOKENS_KB")"
+        echo -ne ${YELLOW}是否继续清理登录态相关存储？这会强制重新登录 Windsurf [y/N]: ${NC}
         read -r choice
         case "$choice" in
             y|Y )
-                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/IndexedDB/*"              "第二阶段清理 IndexedDB（可能导致重新登录）"
-                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/WebStorage/*"             "第二阶段清理 WebStorage（可能导致重新登录）"
-                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Local Storage/*"          "第二阶段清理 Local Storage（可能导致重新登录）"
-                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Session Storage/*"        "第二阶段清理 Session Storage（可能导致重新登录）"
-                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/*"         "第二阶段清理 Service Worker（可能导致重新登录）"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Cookies"                  "第二阶段清理 Cookies（可能导致重新登录）"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Cookies-journal"          "第二阶段清理 Cookies-journal"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Network Persistent State" "第二阶段清理 Network Persistent State"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/TransportSecurity"        "第二阶段清理 TransportSecurity"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/DIPS"                     "第二阶段清理 DIPS"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/DIPS-wal"                 "第二阶段清理 DIPS-wal"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/SharedStorage"            "第二阶段清理 SharedStorage"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/SharedStorage-wal"        "第二阶段清理 SharedStorage-wal"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Trust Tokens"             "第二阶段清理 Trust Tokens"
-                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Trust Tokens-journal"     "第二阶段清理 Trust Tokens-journal"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/WebStorage/*"             "清理 WebStorage（内嵌网页登录态）"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Local Storage/*"          "清理 Local Storage（会话数据）"
+                clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Session Storage/*"        "清理 Session Storage"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Cookies"                  "清理 Cookies（登录 Cookie）"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Cookies-journal"          "清理 Cookies-journal"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Network Persistent State" "清理 Network Persistent State"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/TransportSecurity"        "清理 TransportSecurity"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/DIPS"                     "清理 DIPS"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/DIPS-wal"                 "清理 DIPS-wal"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/SharedStorage"            "清理 SharedStorage"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/SharedStorage-wal"        "清理 SharedStorage-wal"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Trust Tokens"             "清理 Trust Tokens"
+                clean_file_with_stats "$WINDSURF_SUPPORT_DIR/Trust Tokens-journal"     "清理 Trust Tokens-journal"
                 ;;
             * )
-                print_info "已保留登录态相关存储"
+                print_info "已保留登录态相关存储（推荐）"
                 ;;
         esac
     fi
 
     echo ""
     print_success "深度清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
-    print_info "已保留对话历史、memories、skills、extensions、用户设置；第二阶段未执行时也会保留登录态相关存储"
-    
-    # 清理完成后自动重置 Windsurf ID
-    echo ""
-    print_info "正在自动重置 Windsurf ID..."
-    reset_windsurf_id_auto
+    print_info "已保留对话历史（cascade/*.pb）、memories、skills、extensions、用户设置"
+
+    # 清理完毕 -> 强制重置设备 ID（默认行为，FORCE_RESET_ID=0 可关闭）
+    auto_reset_after_clean
 }
 
 # ----------------------------------------------------------------------------
@@ -1850,6 +1998,382 @@ smart_optimize() {
     echo "  本次优化释放空间: $(format_kb_size "$OPTIMIZED_KB")"
     echo ""
     print_success "一键智能优化完成"
+}
+
+# ----------------------------------------------------------------------------
+# 功能23: Cascade 对话历史归档（保留对话但解决"对话长卡顿"）
+# 说明：
+#   Windsurf 的 Cascade 启动时会尝试加载 ~/.codeium/windsurf/cascade/*.pb，
+#   当这些文件累计到几百 MB（单文件可达 27MB 以上）时，切换/启动会明显变卡。
+#   本功能把"超过 N 天"或"超过 M MB"的旧对话 *移动*（不是删除）到归档目录，
+#   减小运行时加载量。需要时可以随时把归档文件拷回原目录恢复访问。
+# ----------------------------------------------------------------------------
+archive_old_conversations() {
+    print_info "Cascade 对话历史归档（移动不删除，解决对话长卡顿）..."
+
+    CASCADE_PB_DIR="$CASCADE_DIR"
+    if [ ! -d "$CASCADE_PB_DIR" ]; then
+        print_warning "未找到对话目录：$CASCADE_PB_DIR"
+        return 0
+    fi
+
+    TOTAL_PB_COUNT=$(find "$CASCADE_PB_DIR" -maxdepth 1 -name "*.pb" -type f 2>/dev/null | wc -l | tr -d ' ')
+    TOTAL_PB_KB=$(du -sk "$CASCADE_PB_DIR" 2>/dev/null | awk '{print $1+0}')
+    TOTAL_PB_KB=${TOTAL_PB_KB:-0}
+
+    if [ "$TOTAL_PB_COUNT" -eq 0 ] 2>/dev/null; then
+        print_info "当前没有对话历史文件，无需归档"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}========== 当前对话历史概况 ==========${NC}"
+    echo -e "  对话文件总数: ${YELLOW}$TOTAL_PB_COUNT${NC}"
+    echo -e "  对话历史总量: ${YELLOW}$(format_kb_size "$TOTAL_PB_KB")${NC}"
+    echo ""
+    echo -e "${CYAN}体积 Top 10 对话:${NC}"
+    find "$CASCADE_PB_DIR" -maxdepth 1 -name "*.pb" -type f 2>/dev/null \
+        | xargs -I{} du -sk "{}" 2>/dev/null | sort -rn | head -10 \
+        | while read -r sz f; do
+            fname=$(basename "$f")
+            mtime=$(stat -f "%Sm" -t "%Y-%m-%d" "$f" 2>/dev/null)
+            printf "    %-45s %-12s %s\n" "$fname" "$(format_kb_size "$sz")" "$mtime"
+        done
+    echo ""
+
+    echo -e "${YELLOW}请选择归档策略:${NC}"
+    echo "  1) 按时间：归档 30 天以上的对话（推荐）"
+    echo "  2) 按时间：归档 14 天以上的对话（激进）"
+    echo "  3) 按大小：归档大于 10MB 的对话"
+    echo "  4) 按大小：归档大于 5MB 的对话（激进）"
+    echo "  5) 同时按时间和大小：30 天以上 或 大于 10MB"
+    echo "  6) 自定义（交互式输入）"
+    echo "  0) 取消"
+    echo ""
+    echo -ne ${CYAN}请选择 [0-6]: ${NC}
+    read -r arc_choice
+
+    ARC_DAYS=-1
+    ARC_MB=-1
+    case "$arc_choice" in
+        0) print_info "已取消操作"; return 0 ;;
+        1) ARC_DAYS=30 ;;
+        2) ARC_DAYS=14 ;;
+        3) ARC_MB=10 ;;
+        4) ARC_MB=5 ;;
+        5) ARC_DAYS=30; ARC_MB=10 ;;
+        6)
+            echo -ne ${CYAN}归档多少天以前的对话？\(留空跳过时间维度\): ${NC}
+            read -r in_days
+            if [[ "$in_days" =~ ^[0-9]+$ ]] && [ "$in_days" -gt 0 ]; then
+                ARC_DAYS=$in_days
+            fi
+            echo -ne ${CYAN}归档大于多少 MB 的对话？\(留空跳过大小维度\): ${NC}
+            read -r in_mb
+            if [[ "$in_mb" =~ ^[0-9]+$ ]] && [ "$in_mb" -gt 0 ]; then
+                ARC_MB=$in_mb
+            fi
+            if [ "$ARC_DAYS" -le 0 ] && [ "$ARC_MB" -le 0 ]; then
+                print_warning "未指定任何归档维度，已取消"
+                return 0
+            fi
+            ;;
+        *) print_error "无效选项"; return 0 ;;
+    esac
+
+    # 扫描符合条件的对话
+    MATCHED_FILES=()
+    MATCHED_TOTAL_KB=0
+    while IFS= read -r pb; do
+        [ -z "$pb" ] && continue
+        # 时间条件
+        time_hit=0
+        if [ "$ARC_DAYS" -gt 0 ]; then
+            if find "$pb" -mtime +"$ARC_DAYS" -print 2>/dev/null | grep -q .; then
+                time_hit=1
+            fi
+        fi
+        # 大小条件
+        size_hit=0
+        if [ "$ARC_MB" -gt 0 ]; then
+            pb_kb=$(du -sk "$pb" 2>/dev/null | awk '{print $1+0}')
+            if [ "${pb_kb:-0}" -gt $((ARC_MB * 1024)) ]; then
+                size_hit=1
+            fi
+        fi
+        # 任一条件命中就归档（OR 逻辑，与菜单描述一致）
+        if [ "$time_hit" -eq 1 ] || [ "$size_hit" -eq 1 ]; then
+            MATCHED_FILES+=("$pb")
+            pb_kb=${pb_kb:-$(du -sk "$pb" 2>/dev/null | awk '{print $1+0}')}
+            MATCHED_TOTAL_KB=$((MATCHED_TOTAL_KB + ${pb_kb:-0}))
+        fi
+    done < <(find "$CASCADE_PB_DIR" -maxdepth 1 -name "*.pb" -type f 2>/dev/null)
+
+    MATCHED_COUNT=${#MATCHED_FILES[@]}
+    if [ "$MATCHED_COUNT" -eq 0 ]; then
+        print_info "没有符合条件的对话可归档"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}========== 将归档的对话 ==========${NC}"
+    echo -e "  命中文件数: ${YELLOW}$MATCHED_COUNT${NC}"
+    echo -e "  合计大小:   ${YELLOW}$(format_kb_size "$MATCHED_TOTAL_KB")${NC}"
+    echo ""
+    for pb in "${MATCHED_FILES[@]}"; do
+        pb_kb=$(du -sk "$pb" 2>/dev/null | awk '{print $1+0}')
+        mtime=$(stat -f "%Sm" -t "%Y-%m-%d" "$pb" 2>/dev/null)
+        printf "    %-45s %-12s %s\n" "$(basename "$pb")" "$(format_kb_size "${pb_kb:-0}")" "$mtime"
+    done
+    echo ""
+
+    ARCHIVE_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    ARCHIVE_TARGET="$HOME/.windsurf-conversations-archive-$ARCHIVE_TIMESTAMP"
+    echo -e "归档目标目录: ${CYAN}$ARCHIVE_TARGET${NC}"
+    echo -e "${GREEN}注意：这是移动操作（不是删除），随时可以拷回 $CASCADE_PB_DIR 恢复。${NC}"
+    echo ""
+
+    if ! confirm_action; then
+        print_info "已取消操作"
+        return 0
+    fi
+
+    if ! check_windsurf_running; then
+        return 1
+    fi
+
+    mkdir -p "$ARCHIVE_TARGET"
+    MOVED_COUNT=0
+    for pb in "${MATCHED_FILES[@]}"; do
+        if mv "$pb" "$ARCHIVE_TARGET/" 2>/dev/null; then
+            MOVED_COUNT=$((MOVED_COUNT + 1))
+        fi
+    done
+
+    # 生成恢复脚本，方便用户一键恢复
+    cat > "$ARCHIVE_TARGET/restore.sh" << RESTORE_EOF
+#!/bin/bash
+# 一键恢复本次归档的所有对话到 Windsurf。
+# 使用方法： bash restore.sh
+set -e
+TARGET="\$HOME/.codeium/windsurf/cascade"
+mkdir -p "\$TARGET"
+cp -n "\$(dirname "\$0")"/*.pb "\$TARGET/"
+echo "已恢复到 \$TARGET，请重启 Windsurf。"
+RESTORE_EOF
+    chmod +x "$ARCHIVE_TARGET/restore.sh" 2>/dev/null || true
+
+    # 生成归档信息
+    cat > "$ARCHIVE_TARGET/archive_info.txt" << AEOF
+========================================
+Windsurf Cascade 对话归档
+========================================
+归档时间: $(date)
+归档来源: $CASCADE_PB_DIR
+命中条件: 天数阈值=$ARC_DAYS，大小阈值(MB)=$ARC_MB
+归档文件数: $MOVED_COUNT
+归档目录: $ARCHIVE_TARGET
+
+恢复方法（任选其一）：
+  1. 直接运行脚本：  bash "$ARCHIVE_TARGET/restore.sh"
+  2. 手动复制文件：  cp "$ARCHIVE_TARGET"/*.pb "$CASCADE_PB_DIR/"
+  3. 只恢复某一个：  cp "$ARCHIVE_TARGET/<file>.pb" "$CASCADE_PB_DIR/"
+恢复后重启 Windsurf 即可再次看到这些对话。
+========================================
+AEOF
+
+    AFTER_PB_KB=$(du -sk "$CASCADE_PB_DIR" 2>/dev/null | awk '{print $1+0}')
+    AFTER_PB_KB=${AFTER_PB_KB:-0}
+    RELEASED_KB=$((TOTAL_PB_KB - AFTER_PB_KB))
+    if [ "$RELEASED_KB" -lt 0 ]; then RELEASED_KB=0; fi
+
+    echo ""
+    print_success "已归档 $MOVED_COUNT 个对话到 $ARCHIVE_TARGET"
+    print_success "Cascade 目录从 $(format_kb_size "$TOTAL_PB_KB") 缩减到 $(format_kb_size "$AFTER_PB_KB")（释放 $(format_kb_size "$RELEASED_KB")）"
+    print_info "Windsurf 重启后加载更快。想恢复任何对话：bash \"$ARCHIVE_TARGET/restore.sh\""
+
+    # 归档完毕 -> 强制重置设备 ID（默认行为）
+    if [ "$MOVED_COUNT" -gt 0 ] 2>/dev/null; then
+        auto_reset_after_clean
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 功能24: 卡顿快速诊断 + 一键安全优化（保留对话、保留登录）
+# 说明：
+#   专为"Cascade 对话长就卡顿"场景设计。只动缓存/索引/碎片，不动：
+#     1. cascade/*.pb 对话历史
+#     2. Cookies / Local Storage / WebStorage / installation_id / machineid（登录态）
+#     3. memories / skills / mcp_config.json / user_settings.pb（用户配置）
+#     4. settings.json / keybindings.json（个人编辑器设置）
+# ----------------------------------------------------------------------------
+quick_diagnose_and_fix() {
+    print_info "卡顿快速诊断（登录态 + 对话历史会 100% 保留）..."
+
+    # ── 诊断阶段 ───────────────────────────────────────────────────────────
+    echo ""
+    echo -e "${CYAN}========== 卡顿维度扫描 ==========${NC}"
+
+    CASCADE_TOTAL_KB=$(du -sk "$CASCADE_DIR" 2>/dev/null | awk '{print $1+0}')
+    CASCADE_TOTAL_KB=${CASCADE_TOTAL_KB:-0}
+    CASCADE_COUNT=$(find "$CASCADE_DIR" -maxdepth 1 -name "*.pb" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    STATE_DB_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb")
+    STATE_DB_BACKUP_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup")
+    WS_STORAGE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/User/workspaceStorage")
+    WS_COUNT=$(find "$WINDSURF_SUPPORT_DIR/User/workspaceStorage" -maxdepth 2 -name "state.vscdb" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    CACHE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Cache")
+    CACHED_DATA_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/CachedData")
+    GPUCACHE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/GPUCache")
+    CODECACHE_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Code Cache")
+    INDEXEDDB_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/IndexedDB")
+    SW_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Service Worker")
+    LOGS_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/logs")
+    CRASHPAD_KB=$(calculate_path_size_kb "$WINDSURF_SUPPORT_DIR/Crashpad")
+    IMPLICIT_KB=$(calculate_path_size_kb "$IMPLICIT_DIR")
+    CODE_TRACKER_KB=$(calculate_path_size_kb "$CODE_TRACKER_DIR")
+    TERM_SNAP_COUNT=$(ls /tmp/windsurf-terminal-*.snapshot 2>/dev/null | wc -l | tr -d ' ')
+
+    echo -e "  ${CYAN}[对话历史]${NC}         cascade/ -> $(format_kb_size "$CASCADE_TOTAL_KB") ($CASCADE_COUNT 个对话，保留)"
+    echo -e "  ${CYAN}[数据库]${NC}           state.vscdb -> $(format_kb_size "$STATE_DB_KB")（VACUUM 可压缩）"
+    echo -e "  ${CYAN}[数据库备份]${NC}       state.vscdb.backup -> $(format_kb_size "$STATE_DB_BACKUP_KB")（可清理）"
+    echo -e "  ${CYAN}[工作区存储]${NC}       workspaceStorage/ -> $(format_kb_size "$WS_STORAGE_KB")（$WS_COUNT 个工作区，可 VACUUM）"
+    echo -e "  ${CYAN}[Electron 缓存]${NC}    Cache=$(format_kb_size "$CACHE_KB") / CachedData=$(format_kb_size "$CACHED_DATA_KB") / GPUCache=$(format_kb_size "$GPUCACHE_KB") / Code Cache=$(format_kb_size "$CODECACHE_KB")"
+    echo -e "  ${CYAN}[UI 状态]${NC}          IndexedDB=$(format_kb_size "$INDEXEDDB_KB") / Service Worker=$(format_kb_size "$SW_KB")"
+    echo -e "  ${CYAN}[日志/崩溃]${NC}        logs=$(format_kb_size "$LOGS_KB") / Crashpad=$(format_kb_size "$CRASHPAD_KB")"
+    echo -e "  ${CYAN}[AI 索引]${NC}          implicit=$(format_kb_size "$IMPLICIT_KB") / code_tracker=$(format_kb_size "$CODE_TRACKER_KB")"
+    echo -e "  ${CYAN}[终端快照]${NC}         /tmp/windsurf-terminal-*.snapshot 数量: $TERM_SNAP_COUNT"
+
+    # 计算一键优化释放的总量
+    QUICK_TOTAL_KB=$((STATE_DB_BACKUP_KB + CACHE_KB + CACHED_DATA_KB + GPUCACHE_KB + CODECACHE_KB + INDEXEDDB_KB + SW_KB + LOGS_KB + CRASHPAD_KB + IMPLICIT_KB + CODE_TRACKER_KB))
+
+    echo ""
+    echo -e "${CYAN}========== 建议操作（一键执行将释放 ~$(format_kb_size "$QUICK_TOTAL_KB") + VACUUM 瘦身）==========${NC}"
+    echo "  1. 关闭 Windsurf（必需，否则数据库被锁）"
+    echo "  2. VACUUM 全局 state.vscdb 和所有工作区 state.vscdb（压缩不删数据）"
+    echo "  3. 清理 Cache / CachedData / GPUCache / Code Cache（Electron 内核缓存）"
+    echo "  4. 清理 IndexedDB / Service Worker 缓存（Cascade UI 状态，不影响登录）"
+    echo "  5. 清理 logs / Crashpad（运行日志）"
+    echo "  6. 清理 implicit / code_tracker（AI 索引缓存，会重建）"
+    echo "  7. 清理 /tmp 终端快照 和 .zcompdump（解决终端卡顿）"
+    echo ""
+    echo -e "${GREEN}全程不会碰：cascade/*.pb、Cookies、Local Storage、WebStorage、installation_id、machineid、memories、skills、mcp_config.json、settings.json${NC}"
+    echo ""
+
+    if [ "$CASCADE_TOTAL_KB" -gt 204800 ] 2>/dev/null; then
+        echo -e "${YELLOW}[提示] 你的对话历史已超过 200MB，${NC}"
+        echo -e "${YELLOW}       即便做完上面的优化，Windsurf 加载仍可能偏慢。${NC}"
+        echo -e "${YELLOW}       建议再执行菜单 23 做对话归档（移动不删除）。${NC}"
+        echo ""
+    fi
+
+    echo -ne ${YELLOW}是否执行一键安全优化？[y/N]: ${NC}
+    read -r qc_choice
+    case "$qc_choice" in
+        y|Y ) ;;
+        * ) print_info "已取消操作"; return 0 ;;
+    esac
+
+    if ! check_windsurf_running; then
+        return 1
+    fi
+
+    # ── 执行阶段 ───────────────────────────────────────────────────────────
+    TOTAL_RELEASED_KB=0
+
+    # Electron 内核缓存
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Cache/*"                          "清理 Electron Cache"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedData/*"                     "清理 CachedData"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/GPUCache/*"                       "清理 GPUCache"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Code Cache/*"                     "清理 Code Cache"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnWebGPUCache/*"                "清理 DawnWebGPUCache"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/DawnGraphiteCache/*"              "清理 DawnGraphiteCache"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Shared Dictionary/*"              "清理 Shared Dictionary"
+
+    # UI / 脚本缓存（不影响登录）
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/IndexedDB/*"                      "清理 IndexedDB（Cascade UI 状态）"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/CacheStorage/*"    "清理 Service Worker CacheStorage"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Service Worker/ScriptCache/*"     "清理 Service Worker ScriptCache"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/blob_storage/*"                   "清理 blob_storage"
+
+    # 日志 / 崩溃报告
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/logs/*"                           "清理 logs"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/completed/*"             "清理 Crashpad completed"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/Crashpad/pending/*"               "清理 Crashpad pending"
+
+    # AI 索引缓存（重建）
+    clean_glob_with_stats "$IMPLICIT_DIR/*"                                        "清理 implicit AI 索引缓存"
+    clean_glob_with_stats "$CODE_TRACKER_DIR/*"                                    "清理 code_tracker AI 索引"
+
+    # 扩展和 profile 缓存
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedExtensionVSIXs/*"           "清理旧扩展安装包"
+    clean_glob_with_stats "$WINDSURF_SUPPORT_DIR/CachedProfilesData/*"             "清理配置缓存"
+
+    # 数据库备份（可重建，不是对话历史）
+    clean_file_with_stats "$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb.backup" "清理 state.vscdb.backup（不是对话，是旧备份）"
+
+    # 临时文件
+    clean_glob_with_stats "/tmp/windsurf-terminal-*.snapshot"                      "清理 /tmp 终端快照"
+    clean_glob_with_stats "$HOME/.zcompdump*"                                       "清理 Zsh 自动补全缓存"
+
+    # macOS 系统级 Windsurf 缓存
+    clean_glob_with_stats "$MACOS_WS_CACHE/*"                                      "清理 macOS Windsurf 系统缓存"
+    clean_glob_with_stats "$MACOS_WS_SHIPIT/*"                                     "清理 macOS Windsurf ShipIt 缓存"
+
+    # VACUUM 所有 SQLite 数据库（核心优化！）
+    if command -v sqlite3 &> /dev/null; then
+        echo ""
+        print_info "VACUUM 全局 state.vscdb（保留数据，只压缩碎片）"
+        STATE_DB_FILE="$WINDSURF_SUPPORT_DIR/User/globalStorage/state.vscdb"
+        if [ -f "$STATE_DB_FILE" ]; then
+            B_KB=$(du -sk "$STATE_DB_FILE" 2>/dev/null | awk '{print $1+0}')
+            sqlite3 "$STATE_DB_FILE" "VACUUM;" 2>/dev/null && {
+                A_KB=$(du -sk "$STATE_DB_FILE" 2>/dev/null | awk '{print $1+0}')
+                D_KB=$((B_KB - A_KB))
+                [ "$D_KB" -lt 0 ] && D_KB=0
+                TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + D_KB))
+                print_success "  全局 VACUUM 完成，释放 $(format_kb_size "$D_KB")"
+            }
+        fi
+
+        echo ""
+        print_info "VACUUM 所有工作区 state.vscdb（保留工作区状态）"
+        WS_N=0; WS_REL=0
+        WORKSPACE_STORAGE_DIR="$WINDSURF_SUPPORT_DIR/User/workspaceStorage"
+        if [ -d "$WORKSPACE_STORAGE_DIR" ]; then
+            while IFS= read -r wsdb; do
+                [ -z "$wsdb" ] && continue
+                wb=$(du -sk "$wsdb" 2>/dev/null | awk '{print $1+0}')
+                if sqlite3 "$wsdb" "VACUUM;" 2>/dev/null; then
+                    wa=$(du -sk "$wsdb" 2>/dev/null | awk '{print $1+0}')
+                    wd=$((wb - wa))
+                    [ "$wd" -lt 0 ] && wd=0
+                    WS_REL=$((WS_REL + wd))
+                    WS_N=$((WS_N + 1))
+                fi
+            done < <(find "$WORKSPACE_STORAGE_DIR" -maxdepth 2 -name "state.vscdb" -type f 2>/dev/null)
+            TOTAL_RELEASED_KB=$((TOTAL_RELEASED_KB + WS_REL))
+            print_success "  已 VACUUM $WS_N 个工作区 state.vscdb，释放 $(format_kb_size "$WS_REL")"
+        fi
+    else
+        print_warning "未找到 sqlite3 命令，跳过 VACUUM（建议安装 sqlite3 以获得更好效果）"
+    fi
+
+    echo ""
+    echo -e "${GREEN}========== 一键优化完成 ==========${NC}"
+    print_success "总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
+    print_info "保留内容: cascade/*.pb 对话历史、Cookies、Local Storage、WebStorage、memories、skills、mcp_config.json、settings.json"
+
+    if [ "$CASCADE_TOTAL_KB" -gt 204800 ] 2>/dev/null; then
+        echo ""
+        print_warning "提示：你的 Cascade 对话历史 $(format_kb_size "$CASCADE_TOTAL_KB")，仍然较大"
+        print_info "如果重启后仍感到卡，请接着运行菜单 23 做对话归档（移动不删除）"
+    fi
+
+    # 卡顿优化完毕 -> 强制重置设备 ID（默认行为）
+    auto_reset_after_clean
+    print_info "请现在重新启动 Windsurf（若被要求重新登录，用原来的账户登即可）"
 }
 
 # ----------------------------------------------------------------------------
@@ -2036,6 +2560,9 @@ clean_startup_cache() {
         echo ""
         print_success "启动缓存清理完成！"
         print_info "重启 Windsurf 后启动速度应该会改善"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        auto_reset_after_clean
     else
         print_info "已取消操作"
     fi
@@ -2708,9 +3235,13 @@ show_menu() {
     echo "  21) 清理 Claude Code / codex / gemini-cli / opencode 垃圾缓存"
     echo "  22) 重置 OpenCode CLI ID (针对被限速问题)"
     echo ""
+    echo -e "${YELLOW}== 对话长卡顿专项 (保留对话和登录) ==${NC}"
+    echo "  23) Cascade 对话归档 (移动不删除，解决加载慢)"
+    echo "  24) 卡顿快速诊断 + 一键安全优化 (强烈推荐)"
+    echo ""
     echo "  0) 退出"
     echo ""
-    echo -ne ${CYAN}请输入选项 [0-22]: ${NC}
+    echo -ne ${CYAN}请输入选项 [0-24]: ${NC}
     read -r choice
     
     case $choice in
@@ -2736,6 +3267,8 @@ show_menu() {
         20) smart_optimize ;;
         21) clean_ai_tool_garbage ;;
         22) reset_opencode_id ;;
+        23) archive_old_conversations ;;
+        24) quick_diagnose_and_fix ;;
         0) 
             echo ""
             print_info "感谢使用Mac修复清理工具"

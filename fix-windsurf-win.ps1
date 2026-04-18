@@ -65,6 +65,34 @@ function Write-Header {
     Write-Host "  github.com/1837620622/windsurf-fix-tool" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
+
+    # 运行模式提示
+    if ($env:FORCE_RESET_ID -eq "0" -or $env:FORCE_RESET_ID -eq "false") {
+        Write-Host "[当前模式] 保守模式" -ForegroundColor Green -NoNewline
+        Write-Host "（FORCE_RESET_ID=0）——清理不重置设备 ID，保留登录态"
+    }
+    else {
+        Write-Host "[当前模式] 强制重置模式" -ForegroundColor Red -NoNewline
+        Write-Host "（默认）——所有清理菜单完成后自动重置 Windsurf 设备 ID"
+        Write-Host "  ⚠ 重置后 Windsurf 会被识别为新设备，可能需要重新登录一次" -ForegroundColor Yellow
+        Write-Host "  ⚠ 用途：绕过限速、刷新免费额度、解决服务端缓存异常" -ForegroundColor Yellow
+        Write-Host "  如需关闭强制重置：" -NoNewline
+        Write-Host '  $env:FORCE_RESET_ID="0"; .\fix-windsurf-win.ps1' -ForegroundColor Cyan
+    }
+    Write-Host ""
+    Write-Host "[始终保留] 对话和用户数据，任何模式下都不会被清理：" -ForegroundColor Green
+    Write-Host "  - ~/.codeium/windsurf/cascade/*.pb         对话历史"
+    Write-Host "  - ~/.codeium/windsurf/memories/            用户记忆"
+    Write-Host "  - ~/.codeium/windsurf/skills/              技能"
+    Write-Host "  - ~/.codeium/windsurf/mcp_config.json      MCP 配置"
+    Write-Host "  - ~/.codeium/windsurf/user_settings.pb     用户偏好"
+    Write-Host "  - %APPDATA%\Windsurf\User\settings.json    编辑器设置"
+    Write-Host ""
+    Write-Host "[清理后会被强制重置] 仅在强制重置模式下（默认）：" -ForegroundColor Red
+    Write-Host "  - installation_id                          Windsurf 安装标识"
+    Write-Host "  - machineid                                机器标识"
+    Write-Host "  - storage.json 中的 telemetry.* 多项标识"
+    Write-Host ""
 }
 
 # ----------------------------------------------------------------------------
@@ -153,6 +181,9 @@ function Clear-CascadeCache {
         try {
             Remove-Item -Path $CascadeDir -Recurse -Force
             Write-ColorOutput "Cascade 缓存已清理" "Success"
+
+            # 清理完毕 -> 强制重置设备 ID（默认行为）
+            Invoke-AutoResetAfterClean
         }
         catch {
             Write-ColorOutput "清理失败: $_" "Error"
@@ -196,6 +227,9 @@ function Clear-ExtensionCache {
         }
 
         Write-ColorOutput "扩展缓存清理完成" "Success"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        Invoke-AutoResetAfterClean
     }
     else {
         Write-ColorOutput "已取消操作" "Info"
@@ -277,6 +311,9 @@ function Clear-StartupCache {
         Write-Host ""
         Write-ColorOutput "启动缓存清理完成！" "Success"
         Write-ColorOutput "重启 Windsurf 后启动速度应该会改善" "Info"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        Invoke-AutoResetAfterClean
     }
     else {
         Write-ColorOutput "已取消操作" "Info"
@@ -1003,6 +1040,9 @@ function Clear-TempFiles {
             }
         }
         Write-ColorOutput "临时文件清理完成" "Success"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        Invoke-AutoResetAfterClean
     }
     else {
         Write-ColorOutput "已取消操作" "Info"
@@ -1020,7 +1060,10 @@ function Start-FullRepair {
         if (-not (Test-WindsurfRunning)) {
             return
         }
-        
+
+        # 标记批量模式：子函数跳过各自的 Invoke-AutoResetAfterClean
+        $env:_IN_BATCH_REPAIR = "1"
+
         Clear-CascadeCache
         Clear-ExtensionCache
         Clear-StartupCache
@@ -1029,9 +1072,15 @@ function Start-FullRepair {
         Set-PSExecutionPolicy
         Clear-TempFiles
         New-DiagnosticReport
-        
+
+        # 退出批量模式，末尾统一重置一次
+        $env:_IN_BATCH_REPAIR = "0"
+
         Write-Host ""
         Write-ColorOutput "完整修复已完成！" "Success"
+
+        # 统一在完整修复末尾执行一次强制重置
+        Invoke-AutoResetAfterClean
         Write-ColorOutput "请重新启动 Windsurf" "Info"
     }
     else {
@@ -1419,6 +1468,9 @@ function Clear-AIToolGarbage {
     if ($didClean) {
         Write-ColorOutput "四个 AI 工具垃圾缓存清理完成，总释放空间: $(Format-KbSize $script:TotalReleasedKb)" "Success"
         Write-ColorOutput "核心配置、MCP、登录认证、skills、history 和正式数据库均已保留" "Info"
+
+        # 清理完毕 -> 强制重置 Windsurf 设备 ID（默认行为）
+        Invoke-AutoResetAfterClean
     }
     else {
         Write-ColorOutput "未执行任何清理操作" "Info"
@@ -1520,6 +1572,9 @@ function Deep-CleanRuntimeCache {
     Write-Host ""
     Write-ColorOutput "深度清理完成，总释放空间: $(Format-KbSize $script:TotalReleasedKb)" "Success"
     Write-ColorOutput "已保留对话历史、memories、skills、extensions、用户设置" "Info"
+
+    # 清理完毕 -> 强制重置设备 ID（默认行为，FORCE_RESET_ID=0 可关闭）
+    Invoke-AutoResetAfterClean
 }
 
 # ----------------------------------------------------------------------------
@@ -1758,6 +1813,158 @@ function Restore-McpSkillsRules {
         Write-ColorOutput "请重启 Windsurf 使更改生效" "Info"
     }
     else { Write-ColorOutput "已取消操作" "Info" }
+}
+
+# ----------------------------------------------------------------------------
+# 内部函数: 自动重置 Windsurf ID（无确认提示，供清理流程自动调用）
+# ----------------------------------------------------------------------------
+function Reset-WindsurfIdAuto {
+    $InstallationIdFile = Join-Path $WindsurfDir "installation_id"
+    $MachineIdFile = Join-Path $env:APPDATA "Windsurf\machineid"
+    $StorageJson = Join-Path $env:APPDATA "Windsurf\User\globalStorage\storage.json"
+
+    # 生成新的 UUID / 随机字节
+    $NewInstallId = [guid]::NewGuid().ToString()
+    $NewMachineId = [guid]::NewGuid().ToString()
+    $NewDevDeviceId = [guid]::NewGuid().ToString()
+    $NewSqmId = [guid]::NewGuid().ToString().Replace("-", "").ToUpper()
+    $NewMacMachineId = -join ((1..16) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+    $NewTelemetryMachineId = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+
+    # 重置 installation_id
+    if ((Test-Path $InstallationIdFile) -or (Test-Path (Split-Path $InstallationIdFile))) {
+        try { $NewInstallId | Out-File $InstallationIdFile -Encoding UTF8 -Force } catch {}
+    }
+
+    # 重置 machineid
+    if ((Test-Path $MachineIdFile) -or (Test-Path (Split-Path $MachineIdFile))) {
+        try { $NewMachineId | Out-File $MachineIdFile -Encoding UTF8 -Force } catch {}
+    }
+
+    # 重置 storage.json 中的 telemetry ID
+    if (Test-Path $StorageJson) {
+        try {
+            $StorageData = Get-Content $StorageJson -Raw | ConvertFrom-Json
+            $StorageData | Add-Member -NotePropertyName "telemetry.devDeviceId" -NotePropertyValue $NewDevDeviceId -Force
+            $StorageData | Add-Member -NotePropertyName "telemetry.macMachineId" -NotePropertyValue $NewMacMachineId -Force
+            $StorageData | Add-Member -NotePropertyName "telemetry.machineId" -NotePropertyValue $NewTelemetryMachineId -Force
+            $StorageData | Add-Member -NotePropertyName "telemetry.sqmId" -NotePropertyValue $NewSqmId -Force
+            $StorageData | ConvertTo-Json -Depth 10 | Out-File $StorageJson -Encoding UTF8 -Force
+        }
+        catch { }
+    }
+
+    # 【关键补强】重置 state.vscdb 的 ItemTable 中的 telemetry 键
+    # VSCode/Windsurf 的 globalStorage 会把 telemetry 同时存到 SQLite 里，只改 storage.json 会被覆盖
+    $StateDb = Join-Path $env:APPDATA "Windsurf\User\globalStorage\state.vscdb"
+    if (Test-Path $StateDb) {
+        # 优先使用 sqlite3.exe（常见于 Git for Windows、Python、或手动安装）
+        $sqliteExe = Get-Command sqlite3.exe -ErrorAction SilentlyContinue
+        if ($sqliteExe) {
+            $sqlScript = @"
+UPDATE ItemTable SET value = '""$NewTelemetryMachineId""' WHERE key = 'telemetry.machineId';
+UPDATE ItemTable SET value = '""$NewDevDeviceId""' WHERE key = 'telemetry.devDeviceId';
+UPDATE ItemTable SET value = '""$NewSqmId""' WHERE key = 'telemetry.sqmId';
+UPDATE ItemTable SET value = '""$NewMacMachineId""' WHERE key = 'telemetry.macMachineId';
+UPDATE ItemTable SET value = '""$NewInstallId""' WHERE key = 'storage.serviceMachineId';
+"@
+            try {
+                $sqlScript | & $sqliteExe.Source $StateDb
+                Write-ColorOutput "state.vscdb telemetry 键已同步" "Success"
+            } catch {
+                Write-ColorOutput "state.vscdb 更新失败: $_" "Warning"
+            }
+        }
+        elseif (Get-Command python -ErrorAction SilentlyContinue) {
+            # 退而求其次：用 Python 的内置 sqlite3 模块
+            $pyScript = @"
+import sqlite3
+try:
+    c = sqlite3.connect(r'$StateDb')
+    cur = c.cursor()
+    for k, v in [
+        ('telemetry.machineId', '$NewTelemetryMachineId'),
+        ('telemetry.devDeviceId', '$NewDevDeviceId'),
+        ('telemetry.sqmId', '$NewSqmId'),
+        ('telemetry.macMachineId', '$NewMacMachineId'),
+        ('storage.serviceMachineId', '$NewInstallId'),
+    ]:
+        cur.execute("UPDATE ItemTable SET value = ? WHERE key = ?", ('"' + v + '"', k))
+    c.commit()
+    c.close()
+    print('OK')
+except Exception as e:
+    print('ERR', e)
+"@
+            $pyScript | python
+            Write-ColorOutput "state.vscdb telemetry 键已通过 Python 同步" "Success"
+        }
+        else {
+            Write-ColorOutput "未找到 sqlite3.exe 或 python，state.vscdb 未同步（重置可能不彻底）" "Warning"
+            Write-ColorOutput "建议安装 Git for Windows（自带 sqlite3）或 Python" "Info"
+        }
+    }
+
+    # 【Windows 特有】重置注册表 MachineGuid（需要管理员权限）
+    # HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid 是 Windows 系统级机器标识
+    # Windsurf/Electron 应用会读取它作为设备指纹的一部分
+    $RegPath = "HKLM:\SOFTWARE\Microsoft\Cryptography"
+    try {
+        $isAdmin = Test-Administrator
+        if ($isAdmin) {
+            $NewRegMachineGuid = [guid]::NewGuid().ToString()
+            Set-ItemProperty -Path $RegPath -Name "MachineGuid" -Value $NewRegMachineGuid -ErrorAction Stop
+            Write-ColorOutput "Windows 注册表 MachineGuid 已重置: $NewRegMachineGuid" "Success"
+        } else {
+            Write-ColorOutput "跳过注册表 MachineGuid 重置（需要管理员权限）" "Warning"
+            Write-ColorOutput "如需完整重置，请以管理员身份重新运行脚本" "Info"
+        }
+    }
+    catch {
+        Write-ColorOutput "注册表 MachineGuid 重置失败: $_" "Warning"
+    }
+
+    Write-ColorOutput "Windsurf ID 已自动重置（含 storage.json + state.vscdb + 注册表同步）" "Success"
+    Write-Host "  installation_id: $NewInstallId" -ForegroundColor Green
+    Write-Host "  machineid:       $NewMachineId" -ForegroundColor Green
+    Write-Host "  telemetry.*:     已同步到 storage.json 和 state.vscdb" -ForegroundColor Green
+}
+
+# ----------------------------------------------------------------------------
+# 内部函数: 清理流程末尾统一调用的"强制重置设备 ID"入口
+# 默认行为：强制重置（用户要求）
+# 逃生通道：设置环境变量 FORCE_RESET_ID=0 完全跳过
+#   例：$env:FORCE_RESET_ID=0; .\fix-windsurf-win.ps1
+# ----------------------------------------------------------------------------
+function Invoke-AutoResetAfterClean {
+    # 用户主动关闭？
+    if ($env:FORCE_RESET_ID -eq "0" -or $env:FORCE_RESET_ID -eq "false") {
+        Write-ColorOutput "已跳过设备 ID 重置（FORCE_RESET_ID=0）" "Info"
+        return
+    }
+
+    # Start-FullRepair 等批量流程中：子函数跳过，末尾统一重置一次
+    if ($env:_IN_BATCH_REPAIR -eq "1") {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "================ 清理后强制重置 Windsurf 设备 ID ================" -ForegroundColor Cyan
+    Write-ColorOutput "此为用户默认行为：每次清理完成后自动重置设备标识" "Warning"
+    Write-ColorOutput "预期影响：Windsurf 服务端会识别为新设备，可能需要重新登录一次" "Warning"
+    Write-ColorOutput "如需关闭：下次运行前 `$env:FORCE_RESET_ID='0'; .\fix-windsurf-win.ps1" "Info"
+    Write-Host ""
+
+    # 关闭 Windsurf 才能可靠重置 storage.json
+    $wsRunning = Get-Process -Name "Windsurf" -ErrorAction SilentlyContinue
+    if ($wsRunning) {
+        Write-ColorOutput "检测到 Windsurf 正在运行，建议先关闭再重置" "Warning"
+        Write-ColorOutput "将等待 3 秒后继续（Ctrl+C 可取消）..." "Info"
+        Start-Sleep -Seconds 3
+    }
+
+    Reset-WindsurfIdAuto
+    Write-Host "================================================================" -ForegroundColor Cyan
 }
 
 # ----------------------------------------------------------------------------

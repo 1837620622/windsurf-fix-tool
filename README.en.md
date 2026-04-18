@@ -51,7 +51,8 @@ docs, Electron storage behavior, and official PowerShell encoding guidance.
 - macOS:
   `fix-windsurf-mac.sh`
   Includes startup cache cleanup, deep runtime cleanup, MCP diagnostics,
-  terminal fixes, ID reset, and AI tool cleanup.
+  terminal fixes, ID reset, AI tool cleanup, conversation archiving, and
+  long-chat lag diagnosis.
 - Linux:
   `fix-windsurf-linux.sh`
   Includes startup cache cleanup, `chrome-sandbox` repair, systemd OSC
@@ -74,6 +75,7 @@ docs, Electron storage behavior, and official PowerShell encoding guidance.
 | `fix-windsurf-win.ps1` | Main Windows repair script |
 | `fix-windsurf-win.bat` | Windows launcher for the PowerShell version |
 | `macos-safe-cleanup.sh` | macOS system and developer cache cleanup script |
+| `WINDSURF-CLEANING-GUIDE.md` | Guide for cleanup, lag, and device-ID modes |
 | `README.md` | Chinese documentation |
 | `README.en.md` | English documentation |
 
@@ -132,6 +134,35 @@ chmod +x macos-safe-cleanup.sh
    whether to continue with risky session stores such as `IndexedDB`,
    `WebStorage`, and `Cookies`.
 5. Treat `cascade` cleanup as a last resort for severe startup failures.
+
+If you are specifically working on long-chat lag, also read the
+[Windsurf cleaning guide](./WINDSURF-CLEANING-GUIDE.md).
+
+## Runtime Modes
+
+The main scripts now support two modes:
+
+- Forced reset mode:
+  cleanup followed by automatic reset of `installation_id`, `machineid`, and
+  telemetry identifiers.
+- Conservative mode:
+  cleanup without automatic device-ID reset, which is better when you want to
+  preserve the current login state as much as possible.
+
+Examples:
+
+```bash
+FORCE_RESET_ID=0 bash fix-windsurf-mac.sh
+FORCE_RESET_ID=0 bash fix-windsurf-linux.sh
+```
+
+```powershell
+$env:FORCE_RESET_ID="0"
+.\fix-windsurf-win.ps1
+```
+
+Both modes keep `cascade/*.pb` conversation history. The difference is whether
+device identifiers are reset after cleanup.
 
 ## Manual Cleanup Commands
 
@@ -294,6 +325,7 @@ sure these domains are reachable:
 - [Windsurf Terminal Documentation](https://docs.windsurf.com/windsurf/terminal)
 - [Windsurf MCP Documentation](https://docs.windsurf.com/windsurf/cascade/mcp)
 - [PowerShell File Encoding Guidance](https://learn.microsoft.com/en-us/powershell/scripting/dev-cross-plat/vscode/understanding-file-encoding?view=powershell-7.5)
+- [Windsurf cleaning guide](./WINDSURF-CLEANING-GUIDE.md)
 
 ## Author
 

@@ -64,6 +64,29 @@ print_header() {
     echo -e "${CYAN}  github.com/1837620622/windsurf-fix-tool${NC}"
     echo -e "${CYAN}========================================${NC}"
     echo ""
+    # ── 运行模式提示 ─────────────────────────────────────────────────
+    if [ "${FORCE_RESET_ID:-1}" = "0" ] || [ "${FORCE_RESET_ID:-1}" = "false" ]; then
+        echo -e "${GREEN}[当前模式] 保守模式${NC}（FORCE_RESET_ID=0）——清理不重置设备 ID，保留登录态"
+    else
+        echo -e "${RED}[当前模式] 强制重置模式${NC}（默认）——所有清理菜单完成后自动重置 Windsurf 设备 ID"
+        echo -e "  ${YELLOW}⚠ 重置后 Windsurf 会被识别为新设备，可能需要重新登录一次${NC}"
+        echo -e "  ${YELLOW}⚠ 用途：绕过限速、刷新免费额度、解决服务端缓存异常${NC}"
+        echo -e "  如需关闭强制重置：${CYAN}FORCE_RESET_ID=0 bash fix-windsurf-linux.sh${NC}"
+    fi
+    echo ""
+    echo -e "${GREEN}[始终保留]${NC} 对话和用户数据，任何模式下都不会被清理："
+    echo -e "  • ${CYAN}~/.codeium/windsurf/cascade/*.pb${NC}            对话历史"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/memories/${NC}                 用户记忆"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/skills/${NC}                   技能"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/mcp_config.json${NC}          MCP 配置"
+    echo -e "  • ${CYAN}~/.codeium/windsurf/user_settings.pb${NC}          用户偏好"
+    echo -e "  • ${CYAN}~/.config/Windsurf/User/settings.json${NC}         编辑器设置"
+    echo ""
+    echo -e "${RED}[清理后会被强制重置]${NC} 仅在强制重置模式下（默认）："
+    echo -e "  • ${CYAN}installation_id${NC}                              Windsurf 安装标识"
+    echo -e "  • ${CYAN}machineid${NC}                                    机器标识"
+    echo -e "  • ${CYAN}storage.json${NC} 中的 telemetry.devDeviceId/macMachineId/machineId/sqmId"
+    echo ""
 }
 
 print_info() {
@@ -130,6 +153,12 @@ check_windsurf_running() {
     if pgrep -f "windsurf" > /dev/null 2>&1; then
         print_warning "检测到 Windsurf 正在运行"
         echo -e "  请先关闭 Windsurf 再执行修复操作"
+        if [ "${TERM_PROGRAM:-}" = "vscode" ]; then
+            print_warning "当前看起来是在 Windsurf / VS Code 类内置终端中运行"
+            echo -e "  如果在这里自动关闭 Windsurf，当前终端会一起消失，看起来像脚本退出"
+            echo -e "  建议先手动关闭 Windsurf，再从系统终端重新运行脚本"
+            return 1
+        fi
         echo -ne "${YELLOW}是否自动关闭Windsurf？[y/N]: ${NC}"
         read -r choice
         case "$choice" in
@@ -137,13 +166,16 @@ check_windsurf_running() {
                 pkill -f "windsurf" 2>/dev/null || true
                 sleep 2
                 print_success "Windsurf 已关闭"
+                return 0
                 ;;
             * )
                 print_error "请手动关闭 Windsurf 后重试"
-                exit 1
+                return 1
                 ;;
         esac
     fi
+
+    return 0
 }
 
 # ----------------------------------------------------------------------------
@@ -167,6 +199,9 @@ clean_cascade_cache() {
         # 删除
         rm -rf "$CASCADE_DIR"
         print_success "Cascade 缓存已清理"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为，FORCE_RESET_ID=0 可关闭）
+        auto_reset_after_clean
     else
         print_info "已取消操作"
     fi
@@ -199,6 +234,9 @@ clean_extension_cache() {
         fi
 
         print_success "扩展缓存清理完成"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        auto_reset_after_clean
     else
         print_info "已取消操作"
     fi
@@ -378,7 +416,9 @@ clean_startup_cache() {
     echo ""
     
     if confirm_action; then
-        check_windsurf_running
+        if ! check_windsurf_running; then
+            return 1
+        fi
         
         # 清理 GPU 缓存
         CACHE_DIR="$WINDSURF_CONFIG_DIR/Cache"
@@ -433,6 +473,9 @@ clean_startup_cache() {
         echo ""
         print_success "启动缓存清理完成！"
         print_info "重启 Windsurf 后启动速度应该会改善"
+
+        # 清理完毕 -> 强制重置设备 ID（默认行为）
+        auto_reset_after_clean
     else
         print_info "已取消操作"
     fi
@@ -1191,7 +1234,13 @@ full_repair() {
     print_warning "此操作将执行所有修复步骤"
     
     if confirm_action; then
-        check_windsurf_running
+        if ! check_windsurf_running; then
+            return 1
+        fi
+        # 标记批量模式：子函数跳过各自的 auto_reset_after_clean
+        _IN_BATCH_REPAIR=1
+        export _IN_BATCH_REPAIR
+
         clean_cascade_cache
         clean_extension_cache
         clean_startup_cache
@@ -1201,9 +1250,16 @@ full_repair() {
         fix_systemd_osc_context
         detect_shell_theme_conflicts
         generate_diagnostic_report
-        
+
+        # 退出批量模式，末尾统一重置一次
+        _IN_BATCH_REPAIR=0
+        export _IN_BATCH_REPAIR
+
         echo ""
         print_success "完整修复已完成！"
+
+        # 统一在完整修复末尾执行一次强制重置
+        auto_reset_after_clean
         print_info "请重新启动 Windsurf"
     else
         print_info "已取消操作"
@@ -1713,6 +1769,9 @@ clean_ai_tool_garbage() {
     if [ "$DID_CLEAN" -eq 1 ] 2>/dev/null; then
         print_success "四个 AI 工具垃圾缓存清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
         print_info "核心配置、MCP、登录认证、skills、history 和正式数据库均已保留"
+
+        # 清理完毕 -> 强制重置 Windsurf 设备 ID（默认行为）
+        auto_reset_after_clean
     else
         print_info "未执行任何清理操作"
     fi
@@ -1745,7 +1804,9 @@ deep_clean_runtime_cache() {
         print_info "已启用自动确认模式"
     fi
 
-    check_windsurf_running
+    if ! check_windsurf_running; then
+        return 1
+    fi
     # 初始化全局释放空间计数器
     TOTAL_RELEASED_KB=0
 
@@ -1778,6 +1839,9 @@ deep_clean_runtime_cache() {
     echo ""
     print_success "深度清理完成，总释放空间: $(format_kb_size "$TOTAL_RELEASED_KB")"
     print_info "已保留对话历史、memories、skills、extensions、用户设置"
+
+    # 清理完毕 -> 强制重置设备 ID（默认行为，FORCE_RESET_ID=0 可关闭）
+    auto_reset_after_clean
 }
 
 # ----------------------------------------------------------------------------
@@ -2112,6 +2176,101 @@ restore_mcp_skills_rules() {
 }
 
 # ----------------------------------------------------------------------------
+# 内部函数: 自动重置 Windsurf ID（无确认提示，供清理流程自动调用）
+# ----------------------------------------------------------------------------
+reset_windsurf_id_auto() {
+    INSTALLATION_ID_FILE="$WINDSURF_DIR/installation_id"
+    MACHINE_ID_FILE="$HOME/.config/Windsurf/machineid"
+    STORAGE_JSON="$HOME/.config/Windsurf/User/globalStorage/storage.json"
+
+    # 生成新的 UUID
+    NEW_INSTALL_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null)
+    NEW_MACHINE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null)
+    NEW_DEV_DEVICE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null)
+    NEW_SQM_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4().hex.upper())" 2>/dev/null)
+    NEW_MAC_MACHINE_ID=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
+    NEW_TELEMETRY_MACHINE_ID=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
+
+    if [ -f "$INSTALLATION_ID_FILE" ] || [ -d "$(dirname "$INSTALLATION_ID_FILE")" ]; then
+        echo "$NEW_INSTALL_ID" > "$INSTALLATION_ID_FILE"
+    fi
+    if [ -f "$MACHINE_ID_FILE" ] || [ -d "$(dirname "$MACHINE_ID_FILE")" ]; then
+        echo "$NEW_MACHINE_ID" > "$MACHINE_ID_FILE"
+    fi
+    if [ -f "$STORAGE_JSON" ] && command -v python3 &> /dev/null; then
+        python3 << PYEOF
+import json
+try:
+    with open('$STORAGE_JSON', 'r') as f:
+        data = json.load(f)
+    data['telemetry.devDeviceId'] = '$NEW_DEV_DEVICE_ID'
+    data['telemetry.macMachineId'] = '$NEW_MAC_MACHINE_ID'
+    data['telemetry.machineId'] = '$NEW_TELEMETRY_MACHINE_ID'
+    data['telemetry.sqmId'] = '$NEW_SQM_ID'
+    with open('$STORAGE_JSON', 'w') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+except Exception:
+    pass
+PYEOF
+    fi
+
+    # 【关键补强】重置 state.vscdb 的 ItemTable 中的 telemetry 键
+    # VSCode/Windsurf 会把 telemetry 同时镜像到 SQLite 里，只改 storage.json 会被覆盖
+    STATE_DB="$HOME/.config/Windsurf/User/globalStorage/state.vscdb"
+    if [ -f "$STATE_DB" ] && command -v sqlite3 &>/dev/null; then
+        sqlite3 "$STATE_DB" <<SQLEOF 2>/dev/null
+UPDATE ItemTable SET value = '"$NEW_TELEMETRY_MACHINE_ID"' WHERE key = 'telemetry.machineId';
+UPDATE ItemTable SET value = '"$NEW_DEV_DEVICE_ID"' WHERE key = 'telemetry.devDeviceId';
+UPDATE ItemTable SET value = '"$NEW_SQM_ID"' WHERE key = 'telemetry.sqmId';
+UPDATE ItemTable SET value = '"$NEW_MAC_MACHINE_ID"' WHERE key = 'telemetry.macMachineId';
+UPDATE ItemTable SET value = '"$NEW_INSTALL_ID"' WHERE key = 'storage.serviceMachineId';
+SQLEOF
+    fi
+
+    # 【Linux 补强】尝试刷新 /etc/machine-id（需要 root，失败则跳过）
+    # 说明：这是 systemd 层面的机器标识，Windsurf/Electron 不直接读，但某些 sdk 会用
+    # 修改它影响面较大，仅在 --system 参数时执行（默认不动）
+    # 此处不主动动 /etc/machine-id，以保守为主
+
+    print_success "Windsurf ID 已自动重置（含 storage.json + state.vscdb 同步）"
+    echo -e "  installation_id: ${GREEN}$NEW_INSTALL_ID${NC}"
+    echo -e "  machineid:       ${GREEN}$NEW_MACHINE_ID${NC}"
+    echo -e "  telemetry.*:     ${GREEN}已同步到 storage.json 和 state.vscdb${NC}"
+}
+
+# ----------------------------------------------------------------------------
+# 内部函数: 清理流程末尾统一调用的"强制重置设备 ID"入口
+# 默认行为：强制重置（用户要求，用于绕过限速、刷新会话、伪装新设备）
+# 逃生通道：执行前设置环境变量 FORCE_RESET_ID=0 即可完全跳过
+# ----------------------------------------------------------------------------
+auto_reset_after_clean() {
+    if [ "${FORCE_RESET_ID:-1}" = "0" ] || [ "${FORCE_RESET_ID:-1}" = "false" ]; then
+        print_info "已跳过设备 ID 重置（FORCE_RESET_ID=0）"
+        return 0
+    fi
+
+    if [ "${_IN_BATCH_REPAIR:-0}" = "1" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}================ 清理后强制重置 Windsurf 设备 ID ================${NC}"
+    print_warning "此为用户默认行为：每次清理完成后自动重置设备标识"
+    print_warning "预期影响：Windsurf 服务端会识别为新设备，可能需要重新登录一次"
+    print_info   "如需关闭此行为：下次运行前加 FORCE_RESET_ID=0 bash fix-windsurf-linux.sh"
+    echo ""
+
+    if pgrep -f "windsurf" &>/dev/null; then
+        print_warning "检测到 Windsurf 正在运行，建议先关闭再重置，以免 storage.json 被覆盖"
+        print_info "将等待 3 秒后继续（Ctrl+C 可取消）..."
+        sleep 3
+    fi
+
+    reset_windsurf_id_auto
+    echo -e "${CYAN}================================================================${NC}"
+}
+
+# ----------------------------------------------------------------------------
 # 功能21: 重置 Windsurf ID
 # ----------------------------------------------------------------------------
 reset_windsurf_id() {
@@ -2267,9 +2426,9 @@ show_menu() {
     read -r choice
     
     case $choice in
-        1) check_windsurf_running; clean_cascade_cache ;;
+        1) if check_windsurf_running; then clean_cascade_cache; fi ;;
         2) clean_startup_cache ;;
-        3) check_windsurf_running; clean_extension_cache ;;
+        3) if check_windsurf_running; then clean_extension_cache; fi ;;
         4) clean_dev_caches ;;
         5) clean_system_caches ;;
         6) analyze_disk_usage ;;

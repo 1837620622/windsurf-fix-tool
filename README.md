@@ -49,7 +49,7 @@ MCP 加载失败、缓存膨胀，以及 AI 工具残留垃圾文件问题。
 - macOS：
   `fix-windsurf-mac.sh`
   包含启动缓存清理、深度运行时缓存清理、MCP 诊断、终端修复、
-  ID 重置、AI 工具垃圾清理。
+  ID 重置、AI 工具垃圾清理、对话归档、长对话卡顿快速诊断。
 - Linux：
   `fix-windsurf-linux.sh`
   包含启动缓存清理、`chrome-sandbox` 修复、systemd OSC 上下文排查、
@@ -71,6 +71,7 @@ MCP 加载失败、缓存膨胀，以及 AI 工具残留垃圾文件问题。
 | `fix-windsurf-win.ps1` | Windows 主修复脚本 |
 | `fix-windsurf-win.bat` | Windows 批处理入口，便于直接启动 PowerShell 版本 |
 | `macos-safe-cleanup.sh` | macOS 系统数据与开发工具缓存清理脚本 |
+| `WINDSURF-CLEANING-GUIDE.md` | Windsurf 长对话卡顿、清理边界与设备 ID 模式说明 |
 | `README.md` | 中文说明 |
 | `README.en.md` | 英文说明 |
 
@@ -126,6 +127,32 @@ chmod +x macos-safe-cleanup.sh
    现在 `macOS` 的 `18` 号选项会先执行默认安全深清，然后额外询问是否继续
    清理 `IndexedDB / WebStorage / Cookies` 这一组高风险会话存储。
 5. 只有在启动失败或状态异常非常严重时，才把 `cascade` 当作最后手段处理。
+
+如果你正在专门处理“对话越来越长后变卡”的问题，建议同时阅读
+[Windsurf 清理参考手册](./WINDSURF-CLEANING-GUIDE.md)。
+
+## 运行模式
+
+当前主脚本支持两种模式：
+
+- 强制重置模式：
+  清理后自动重置 `installation_id`、`machineid` 和 telemetry 标识。
+- 保守模式：
+  只做清理，不自动重置设备 ID，尽量保留当前登录态。
+
+示例：
+
+```bash
+FORCE_RESET_ID=0 bash fix-windsurf-mac.sh
+FORCE_RESET_ID=0 bash fix-windsurf-linux.sh
+```
+
+```powershell
+$env:FORCE_RESET_ID="0"
+.\fix-windsurf-win.ps1
+```
+
+这两种模式都不会删除 `cascade/*.pb` 对话历史；区别只在于是否额外重置设备标识。
 
 ## 手动清理命令
 
@@ -278,6 +305,7 @@ sudo chmod 4755 /path/to/windsurf/chrome-sandbox
 - [Windsurf Terminal 文档](https://docs.windsurf.com/windsurf/terminal)
 - [Windsurf MCP 文档](https://docs.windsurf.com/windsurf/cascade/mcp)
 - [PowerShell 文件编码说明](https://learn.microsoft.com/en-us/powershell/scripting/dev-cross-plat/vscode/understanding-file-encoding?view=powershell-7.5)
+- [Windsurf 清理参考手册](./WINDSURF-CLEANING-GUIDE.md)
 
 ## 作者
 
