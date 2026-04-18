@@ -56,7 +56,7 @@ format_size() {
 # 确认操作
 confirm() {
     local prompt="${1//？/?}"
-    echo -ne "${YELLOW}$prompt [y/N]: ${NC}"
+    printf "%b%s [y/N]: %b" "${YELLOW}" "$prompt" "${NC}"
     read -r choice
     case "$choice" in
         y|Y ) return 0;;
@@ -1091,27 +1091,30 @@ echo ""
 print_info "32. OpenAI Codex 缓存"
 CODEX_DIR="$HOME/.codex"
 if [ -d "$CODEX_DIR" ]; then
-    CODEX_TMP="$CODEX_DIR/.tmp"
-    CODEX_TMP2="$CODEX_DIR/tmp"
-    CODEX_CACHE="$CODEX_DIR/cache"
-    CODEX_LOG="$CODEX_DIR/log"
-    CODEX_PLUGINS="$CODEX_DIR/plugins/cache"
+    CODEX_ITEMS=(
+        ".tmp::$CODEX_DIR/.tmp"
+        "tmp::$CODEX_DIR/tmp"
+        "cache::$CODEX_DIR/cache"
+        "log::$CODEX_DIR/log"
+        "plugins-cache::$CODEX_DIR/plugins/cache"
+    )
     CODEX_SHM="$CODEX_DIR/logs_1.sqlite-shm"
     CODEX_WAL="$CODEX_DIR/logs_1.sqlite-wal"
     CODEX_MODELS="$CODEX_DIR/models_cache.json"
     CODEX_SKILLS="$CODEX_DIR/vendor_imports/skills-curated-cache.json"
 
-    for cache_dir in "$CODEX_TMP" "$CODEX_TMP2" "$CODEX_CACHE" "$CODEX_LOG" "$CODEX_PLUGINS"; do
+    for item in "${CODEX_ITEMS[@]}"; do
+        label="${item%%::*}"
+        cache_dir="${item#*::}"
         if [ -d "$cache_dir" ]; then
             cache_size=$(get_size_bytes "$cache_dir")
             if [ "$cache_size" -gt 0 ]; then
-                dir_name=$(basename "$cache_dir")
-                echo -e "    ${CYAN}$dir_name${NC}: $(format_size $cache_size)"
-                if confirm "    清理 $dir_name？"; then
+                echo -e "    ${CYAN}$label${NC}: $(format_size $cache_size)"
+                if confirm "    清理 $label"; then
                     rm -rf "$cache_dir"/* 2>/dev/null
                     rm -rf "$cache_dir"/.[!.]* 2>/dev/null
                     TOTAL_FREED=$((TOTAL_FREED + cache_size))
-                    print_success "    $dir_name 已清理"
+                    print_success "    $label 已清理"
                 fi
             fi
         fi
