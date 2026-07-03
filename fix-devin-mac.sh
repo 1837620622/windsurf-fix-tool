@@ -2044,7 +2044,7 @@ clean_devin_local() {
     # 检查 Devin 是否正在运行
     if pgrep -f "Devin" > /dev/null 2>&1; then
         print_warning "检测到 Devin 进程正在运行，建议先完全退出 Devin 再执行清理"
-        echo -ne ${YELLOW}是否继续？(y/N): ${NC}
+        echo -ne "${YELLOW}是否继续? (y/N): ${NC}"
         read -r confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             print_info "已取消操作"
