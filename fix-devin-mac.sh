@@ -2009,7 +2009,7 @@ clean_devin_local() {
     echo ""
 
     # 定义 Devin 主数据目录（与 Windsurf 完全独立）
-    DEVIN_USER_DIR="$HOME/Library/Application Support/Devin/User"
+    local DEVIN_USER_DIR="$HOME/Library/Application Support/Devin/User"
 
     echo -e "${RED}此操作将永久删除以下对话数据（不可恢复）:${NC}"
     echo ""

@@ -1786,7 +1786,7 @@ clean_devin_local() {
     echo ""
 
     # 定义 Devin 用户数据目录（Linux 下 Electron/VS Code 衍生版数据）
-    DEVIN_USER_DIR="$HOME/.config/Devin/User"
+    local DEVIN_USER_DIR="$HOME/.config/Devin/User"
 
     echo -e "${RED}此操作将永久删除以下对话数据（不可恢复）:${NC}"
     echo ""
