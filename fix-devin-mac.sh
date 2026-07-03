@@ -2157,12 +2157,12 @@ archive_old_conversations() {
         4) ARC_MB=5 ;;
         5) ARC_DAYS=30; ARC_MB=10 ;;
         6)
-            echo -ne ${CYAN}归档多少天以前的对话？\(留空跳过时间维度\): ${NC}
+            echo -ne "${CYAN}归档多少天以前的对话? (留空跳过时间维度): ${NC}"
             read -r in_days
             if [[ "$in_days" =~ ^[0-9]+$ ]] && [ "$in_days" -gt 0 ]; then
                 ARC_DAYS=$in_days
             fi
-            echo -ne ${CYAN}归档大于多少 MB 的对话？\(留空跳过大小维度\): ${NC}
+            echo -ne "${CYAN}归档大于多少 MB 的对话? (留空跳过大小维度): ${NC}"
             read -r in_mb
             if [[ "$in_mb" =~ ^[0-9]+$ ]] && [ "$in_mb" -gt 0 ]; then
                 ARC_MB=$in_mb
