@@ -1284,6 +1284,98 @@ function Get-AIToolOptionalGarbageTotalKb {
 # ----------------------------------------------------------------------------
 # 功能19: 清理 Claude Code / codex / gemini-cli / opencode 垃圾缓存
 # ----------------------------------------------------------------------------
+function Clear-DevInLocal {
+    Write-ColorOutput "删除 Devin Local 对话数据（~/.devin 独立版本的所有本地数据）..." "Info"
+    Write-Host ""
+
+    # 定义 Devin 数据路径（与 Windsurf 完全独立，不会影响 cascade、memories、login）
+    $devinAppData = "$env:LOCALAPPDATA\Devin"
+    $devinHome = "$env:USERPROFILE\.devin"
+    $devinLocalShare = "$env:LOCALAPPDATA\devin"
+    $devinConfig = "$env:APPDATA\devin"
+
+    Write-Host "此操作将永久删除以下 Devin 数据（不可恢复）:" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  $devinAppData         Devin 应用数据" -ForegroundColor Cyan
+    Write-Host "    └─ User/History/         对话历史 (169 个会话)"
+    Write-Host "    └─ User/acp-events/     ACP 事件日志"
+    Write-Host "    └─ User/workspaceStorage/ 工作区状态"
+    Write-Host "    └─ User/globalStorage/  全局设置和认证"
+    Write-Host "    └─ blob_storage/        Blob 缓存"
+    Write-Host "    └─ logs/                运行日志"
+    Write-Host "    └─ Cache/ / CachedData/ Electron 缓存"
+    Write-Host ""
+    Write-Host "  $devinHome                    扩展缓存 (~94MB)" -ForegroundColor Cyan
+    Write-Host "  $devinLocalShare       CLI / MCP 数据"
+    Write-Host "  $devinConfig             CLI 配置"
+    Write-Host ""
+    Write-Host "以下数据不受影响（不在 Devin Local 范围内）:" -ForegroundColor Green
+    Write-Host "  • Windsurf cascade/*.pb 对话历史"
+    Write-Host "  • Windsurf memories/、skills/、mcp_config.json"
+    Write-Host "  • Windsurf settings.json、installation_id、machineid"
+    Write-Host "  • Windsurf IndexedDB / WebStorage / Local Storage"
+    Write-Host ""
+
+    if (-not (Confirm-Action "确认删除 Devin Local 数据？此操作不可恢复")) {
+        Write-ColorOutput "已取消操作" "Info"
+        return
+    }
+
+    # 检查 Devin 是否正在运行
+    $devinProc = Get-Process -Name "Devin" -ErrorAction SilentlyContinue
+    if ($devinProc) {
+        Write-ColorOutput "检测到 Devin 进程正在运行，建议先完全退出 Devin 再执行清理" "Warning"
+        if (-not (Confirm-Action "是否继续？")) {
+            Write-ColorOutput "已取消操作" "Info"
+            return
+        }
+    }
+
+    $script:TotalReleasedKb = 0
+    $didClean = $false
+
+    # 清理 Devin 应用数据目录
+    if (Test-Path $devinAppData) {
+        $sizeKb = Get-PathSizeKb -TargetPath $devinAppData
+        Write-ColorOutput "清理 Devin 应用数据: $devinAppData ($(Format-KbSize $sizeKb))" "Info"
+        Remove-PathWithStats -TargetPath $devinAppData -Label "清理 Devin 应用数据"
+        $didClean = $true
+    }
+
+    # 清理 ~/.devin 扩展缓存
+    if (Test-Path $devinHome) {
+        $sizeKb = Get-PathSizeKb -TargetPath $devinHome
+        Write-ColorOutput "清理 Devin 扩展缓存: $devinHome ($(Format-KbSize $sizeKb))" "Info"
+        Remove-PathWithStats -TargetPath $devinHome -Label "清理 Devin 扩展缓存"
+        $didClean = $true
+    }
+
+    # 清理 ~/.local/share/devin
+    if (Test-Path $devinLocalShare) {
+        $sizeKb = Get-PathSizeKb -TargetPath $devinLocalShare
+        Write-ColorOutput "清理 Devin CLI/MCP 数据: $devinLocalShare ($(Format-KbSize $sizeKb))" "Info"
+        Remove-PathWithStats -TargetPath $devinLocalShare -Label "清理 Devin CLI/MCP 数据"
+        $didClean = $true
+    }
+
+    # 清理 ~/.config/devin
+    if (Test-Path $devinConfig) {
+        $sizeKb = Get-PathSizeKb -TargetPath $devinConfig
+        Write-ColorOutput "清理 Devin CLI 配置: $devinConfig ($(Format-KbSize $sizeKb))" "Info"
+        Remove-PathWithStats -TargetPath $devinConfig -Label "清理 Devin CLI 配置"
+        $didClean = $true
+    }
+
+    Write-Host ""
+    if ($didClean) {
+        Write-ColorOutput "Devin Local 对话数据清理完成！总释放空间: $(Format-KbSize $script:TotalReleasedKb)" "Success"
+        Write-ColorOutput "下次启动 Devin 时会像全新安装一样，所有对话/设置需要重新同步" "Info"
+    }
+    else {
+        Write-ColorOutput "未执行任何清理操作" "Info"
+    }
+}
+
 function Clear-AIToolGarbage {
     Write-ColorOutput "扫描 Claude Code / codex / gemini-cli / opencode 垃圾缓存..." "Info"
 
@@ -2078,15 +2170,19 @@ function Show-Menu {
     Write-Host "== AI 工具清理 ==" -ForegroundColor Yellow
     Write-Host "  19) 清理 Claude Code / codex / gemini-cli / opencode 垃圾缓存"
     Write-Host ""
-    Write-Host "== 配置备份与 ID 管理 ==" -ForegroundColor Yellow
-    Write-Host "  20) 备份 MCP 配置 / Skills / 全局 Rules"
-    Write-Host "  21) 还原 MCP 配置 / Skills / 全局 Rules"
+    Write-Host ""
+    Write-Host "== Devin Local 清理 ==" -ForegroundColor Yellow
+    Write-Host "  20) 删除 Devin Local 对话数据 (acp-events / History / workspaceStorage)"
+    Write-Host ""
+    Write-Host "  21) 备份 MCP 配置 / Skills / 全局 Rules"
+    Write-Host "  22) 还原 MCP 配置 / Skills / 全局 Rules"
+    Write-Host "  23) 重置 Windsurf ID (重新生成所有标识)"
     Write-Host "  22) 重置 Windsurf ID (重新生成所有标识)"
     Write-Host ""
     Write-Host "  0) 退出"
     Write-Host ""
     
-    $choice = Read-Host "请输入选项 [0-22]"
+    $choice = Read-Host "请输入选项 [0-23]"
     
     switch ($choice) {
         "1" { if (Test-WindsurfRunning) { Clear-CascadeCache } }
@@ -2110,6 +2206,7 @@ function Show-Menu {
         "19" { Clear-AIToolGarbage }
         "20" { Backup-McpSkillsRules }
         "21" { Restore-McpSkillsRules }
+        "20" { Clear-DevInLocal }
         "22" { Reset-WindsurfId }
         "0" { 
             Write-Host ""

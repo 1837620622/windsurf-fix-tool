@@ -1778,6 +1778,100 @@ clean_ai_tool_garbage() {
 }
 
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# 功能22: 删除 Devin Local 对话数据（手动清理）
+# ----------------------------------------------------------------------------
+clean_devin_local() {
+    print_info "删除 Devin Local 对话数据（~/.devin 独立版本的所有本地数据）..."
+    echo ""
+
+    # 定义 Devin 数据路径（与 Windsurf 完全独立，不会影响 cascade、memories、login）
+    DEVIN_DIR="$HOME/.config/Devin"
+    DEVIN_DEVIN_DIR="$HOME/.devin"
+    DEVIN_LOCAL_DIR="$HOME/.local/share/devin"
+    DEVIN_CONFIG_DIR="$HOME/.config/devin"
+
+    echo -e "${RED}此操作将永久删除以下 Devin 数据（不可恢复）:${NC}"
+    echo ""
+    echo -e "  ${CYAN}~/.config/Devin/${NC}                    Devin 应用数据"
+    echo -e "    └─ User/History/         对话历史 (169 个会话)"
+    echo -e "    └─ User/acp-events/     ACP 事件日志"
+    echo -e "    └─ User/workspaceStorage/ 工作区状态"
+    echo -e "    └─ User/globalStorage/  全局设置和认证"
+    echo -e "    └─ blob_storage/        Blob 缓存"
+    echo -e "    └─ logs/                运行日志"
+    echo -e "    └─ Cache/ / CachedData/ Electron 缓存"
+    echo ""
+    echo -e "  ${CYAN}~/.devin/${NC}                    扩展缓存 (~94MB)"
+    echo -e "  ${CYAN}~/.local/share/devin/${NC}       CLI / MCP 数据"
+    echo -e "  ${CYAN}~/.config/devin/${NC}             CLI 配置"
+    echo ""
+    echo -e "${GREEN}以下数据不受影响（不在 Devin Local 范围内）:${NC}"
+    echo -e "  • Windsurf cascade/*.pb 对话历史"
+    echo -e "  • Windsurf memories/、skills/、mcp_config.json"
+    echo -e "  • Windsurf settings.json、installation_id、machineid"
+    echo -e "  • Windsurf IndexedDB / WebStorage / Local Storage"
+    echo ""
+
+    if ! confirm_action; then
+        print_info "已取消操作"
+        return 0
+    fi
+
+    # 检查 Devin 是否正在运行
+    if pgrep -f "Devin" > /dev/null 2>&1; then
+        print_warning "检测到 Devin 进程正在运行，建议先完全退出 Devin 再执行清理"
+        echo -ne ${YELLOW}是否继续？(y/N): ${NC}
+        read -r confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            print_info "已取消操作"
+            return 0
+        fi
+    fi
+
+    local freed_kb=0
+
+    # 清理 Devin 应用数据目录
+    if [ -d "$DEVIN_DIR" ]; then
+        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_DIR")
+        print_info "清理 Devin 应用数据: $DEVIN_DIR ($(format_kb_size "$size_kb"))"
+        rm -rf "$DEVIN_DIR"/*
+        print_success "已清理 Devin 应用数据"
+        freed_kb=$((freed_kb + size_kb))
+    fi
+
+    # 清理 ~/.devin 扩展缓存
+    if [ -d "$DEVIN_DEVIN_DIR" ]; then
+        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_DEVIN_DIR")
+        print_info "清理 Devin 扩展缓存: $DEVIN_DEVIN_DIR ($(format_kb_size "$size_kb"))"
+        rm -rf "$DEVIN_DEVIN_DIR"
+        print_success "已清理 Devin 扩展缓存"
+        freed_kb=$((freed_kb + size_kb))
+    fi
+
+    # 清理 ~/.local/share/devin
+    if [ -d "$DEVIN_LOCAL_DIR" ]; then
+        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_LOCAL_DIR")
+        print_info "清理 Devin CLI/MCP 数据: $DEVIN_LOCAL_DIR ($(format_kb_size "$size_kb"))"
+        rm -rf "$DEVIN_LOCAL_DIR"
+        print_success "已清理 Devin CLI/MCP 数据"
+        freed_kb=$((freed_kb + size_kb))
+    fi
+
+    # 清理 ~/.config/devin
+    if [ -d "$DEVIN_CONFIG_DIR" ]; then
+        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_CONFIG_DIR")
+        print_info "清理 Devin CLI 配置: $DEVIN_CONFIG_DIR ($(format_kb_size "$size_kb"))"
+        rm -rf "$DEVIN_CONFIG_DIR"
+        print_success "已清理 Devin CLI 配置"
+        freed_kb=$((freed_kb + size_kb))
+    fi
+
+    echo ""
+    print_success "Devin Local 对话数据清理完成！总释放空间: $(format_kb_size $freed_kb)"
+    print_info "下次启动 Devin 时会像全新安装一样，所有对话/设置需要重新同步"
+}
+
 # 功能15: 深度清理运行时缓存（保留对话历史，解决Windsurf运行卡顿）
 # ----------------------------------------------------------------------------
 deep_clean_runtime_cache() {
@@ -2420,10 +2514,11 @@ show_menu() {
     echo -e "${YELLOW}== AI 工具清理 ==${NC}"
     echo "  18) 清理 Claude Code / codex / gemini-cli / opencode 垃圾缓存"
     echo ""
+    echo "  22) 删除 Devin Local 对话数据 (acp-events / History / workspaceStorage)"
+    echo ""
     echo "  0) 退出"
     echo ""
-    echo -ne ${CYAN}请输入选项 [0-21]: ${NC}
-    read -r choice
+    echo -ne ${CYAN}请输入选项 [0-22]: ${NC}
     
     case $choice in
         1) if check_windsurf_running; then clean_cascade_cache; fi ;;
@@ -2445,7 +2540,8 @@ show_menu() {
         17) smart_optimize ;;
         18) clean_ai_tool_garbage ;;
         19) backup_mcp_skills_rules ;;
-        20) restore_mcp_skills_rules ;;
+        21) reset_windsurf_id ;;
+        22) clean_devin_local ;;
         21) reset_windsurf_id ;;
         0) 
             echo ""
