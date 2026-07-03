@@ -1782,35 +1782,24 @@ clean_ai_tool_garbage() {
 # 功能22: 删除 Devin Local 对话数据（手动清理）
 # ----------------------------------------------------------------------------
 clean_devin_local() {
-    print_info "删除 Devin Local 对话数据（~/.devin 独立版本的所有本地数据）..."
+    print_info "删除 Devin Local 对话数据（仅清理 ACP 事件/会话历史/工作区缓存，保留登录和扩展）..."
     echo ""
 
-    # 定义 Devin 数据路径（与 Windsurf 完全独立，不会影响 cascade、memories、login）
-    DEVIN_DIR="$HOME/.config/Devin"
-    DEVIN_DEVIN_DIR="$HOME/.devin"
-    DEVIN_LOCAL_DIR="$HOME/.local/share/devin"
-    DEVIN_CONFIG_DIR="$HOME/.config/devin"
+    # 定义 Devin 用户数据目录（Linux 下 Electron/VS Code 衍生版数据）
+    DEVIN_USER_DIR="$HOME/.config/Devin/User"
 
-    echo -e "${RED}此操作将永久删除以下 Devin 数据（不可恢复）:${NC}"
+    echo -e "${RED}此操作将永久删除以下对话数据（不可恢复）:${NC}"
     echo ""
-    echo -e "  ${CYAN}~/.config/Devin/${NC}                    Devin 应用数据"
-    echo -e "    └─ User/History/         对话历史 (169 个会话)"
-    echo -e "    └─ User/acp-events/     ACP 事件日志"
-    echo -e "    └─ User/workspaceStorage/ 工作区状态"
-    echo -e "    └─ User/globalStorage/  全局设置和认证"
-    echo -e "    └─ blob_storage/        Blob 缓存"
-    echo -e "    └─ logs/                运行日志"
-    echo -e "    └─ Cache/ / CachedData/ Electron 缓存"
+    echo -e "  ${CYAN}User/History/${NC}          会话历史"
+    echo -e "  ${CYAN}User/acp-events/${NC}        ACP 事件日志（如有）"
+    echo -e "  ${CYAN}User/workspaceStorage/${NC}  工作区缓存状态"
     echo ""
-    echo -e "  ${CYAN}~/.devin/${NC}                    扩展缓存 (~94MB)"
-    echo -e "  ${CYAN}~/.local/share/devin/${NC}       CLI / MCP 数据"
-    echo -e "  ${CYAN}~/.config/devin/${NC}             CLI 配置"
-    echo ""
-    echo -e "${GREEN}以下数据不受影响（不在 Devin Local 范围内）:${NC}"
-    echo -e "  • Windsurf cascade/*.pb 对话历史"
-    echo -e "  • Windsurf memories/、skills/、mcp_config.json"
-    echo -e "  • Windsurf settings.json、installation_id、machineid"
-    echo -e "  • Windsurf IndexedDB / WebStorage / Local Storage"
+    echo -e "${GREEN}以下数据不受影响（保留）:${NC}"
+    echo -e "  • User/globalStorage/     登录/认证信息"
+    echo -e "  • extensions/ (~/.devin)   扩展程序"
+    echo -e "  • Cache/ blob_storage/ logs/  Electron 缓存"
+    echo -e "  • ~/.local/share/devin/    MCP / CLI 配置"
+    echo -e "  • ~/.config/devin/         CLI 配置"
     echo ""
 
     if ! confirm_action; then
@@ -1831,45 +1820,30 @@ clean_devin_local() {
 
     local freed_kb=0
 
-    # 清理 Devin 应用数据目录
-    if [ -d "$DEVIN_DIR" ]; then
-        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_DIR")
-        print_info "清理 Devin 应用数据: $DEVIN_DIR ($(format_kb_size "$size_kb"))"
-        rm -rf "$DEVIN_DIR"/*
-        print_success "已清理 Devin 应用数据"
-        freed_kb=$((freed_kb + size_kb))
-    fi
+    # 仅清理三个靶向子目录（保留登录/扩展/缓存/MCP 配置）
+    local targets=(
+        "$DEVIN_USER_DIR/acp-events"
+        "$DEVIN_USER_DIR/History"
+        "$DEVIN_USER_DIR/workspaceStorage"
+    )
 
-    # 清理 ~/.devin 扩展缓存
-    if [ -d "$DEVIN_DEVIN_DIR" ]; then
-        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_DEVIN_DIR")
-        print_info "清理 Devin 扩展缓存: $DEVIN_DEVIN_DIR ($(format_kb_size "$size_kb"))"
-        rm -rf "$DEVIN_DEVIN_DIR"
-        print_success "已清理 Devin 扩展缓存"
-        freed_kb=$((freed_kb + size_kb))
-    fi
-
-    # 清理 ~/.local/share/devin
-    if [ -d "$DEVIN_LOCAL_DIR" ]; then
-        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_LOCAL_DIR")
-        print_info "清理 Devin CLI/MCP 数据: $DEVIN_LOCAL_DIR ($(format_kb_size "$size_kb"))"
-        rm -rf "$DEVIN_LOCAL_DIR"
-        print_success "已清理 Devin CLI/MCP 数据"
-        freed_kb=$((freed_kb + size_kb))
-    fi
-
-    # 清理 ~/.config/devin
-    if [ -d "$DEVIN_CONFIG_DIR" ]; then
-        local size_kb=$(calculate_dir_contents_size_kb "$DEVIN_CONFIG_DIR")
-        print_info "清理 Devin CLI 配置: $DEVIN_CONFIG_DIR ($(format_kb_size "$size_kb"))"
-        rm -rf "$DEVIN_CONFIG_DIR"
-        print_success "已清理 Devin CLI 配置"
-        freed_kb=$((freed_kb + size_kb))
-    fi
+    for target in "${targets[@]}"; do
+        if [ -d "$target" ]; then
+            local size_kb=$(calculate_dir_contents_size_kb "$target")
+            print_info "清理: $target ($(format_kb_size "$size_kb"))"
+            rm -rf "${target:?}"
+            print_success "已删除: $target"
+            freed_kb=$((freed_kb + size_kb))
+        fi
+    done
 
     echo ""
-    print_success "Devin Local 对话数据清理完成！总释放空间: $(format_kb_size $freed_kb)"
-    print_info "下次启动 Devin 时会像全新安装一样，所有对话/设置需要重新同步"
+    if [ "$freed_kb" -gt 0 ]; then
+        print_success "Devin Local 对话数据清理完成！释放空间: $(format_kb_size $freed_kb)"
+        print_info "登录信息和扩展不受影响，重启 Devin 后对话历史会重新同步"
+    else
+        print_info "未找到需要清理的对话数据目录"
+    fi
 }
 
 # 功能15: 深度清理运行时缓存（保留对话历史，解决Windsurf运行卡顿）
@@ -2540,9 +2514,9 @@ show_menu() {
         17) smart_optimize ;;
         18) clean_ai_tool_garbage ;;
         19) backup_mcp_skills_rules ;;
+        20) restore_mcp_skills_rules ;;
         21) reset_windsurf_id ;;
         22) clean_devin_local ;;
-        21) reset_windsurf_id ;;
         0) 
             echo ""
             print_info "感谢使用 Windsurf 修复工具"
