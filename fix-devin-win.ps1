@@ -1334,9 +1334,13 @@ function Clear-DevInLocal {
             $sizeKb = Get-PathSizeKb -TargetPath $target
             Write-ColorOutput "清理: $target ($(Format-KbSize $sizeKb))" "Info"
             Remove-Item -Path $target -Recurse -Force -ErrorAction SilentlyContinue
-            $script:TotalReleasedKb += $sizeKb
-            Write-ColorOutput "已删除: $target" "Success"
-            $didClean = $true
+            if (Test-Path $target) {
+                Write-ColorOutput "删除失败: $target (权限不足或文件被占用)" "Error"
+            } else {
+                $script:TotalReleasedKb += $sizeKb
+                Write-ColorOutput "已删除: $target" "Success"
+                $didClean = $true
+            }
         }
     }
 
