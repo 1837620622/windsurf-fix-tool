@@ -1319,7 +1319,7 @@ function Clear-DevInLocal {
         }
     }
 
-    $script:TotalReleasedKb = 0
+    $freedKb = 0
     $didClean = $false
 
     # 仅清理三个靶向子目录（保留登录/扩展/缓存/MCP 配置）
@@ -1337,7 +1337,7 @@ function Clear-DevInLocal {
             if (Test-Path $target) {
                 Write-ColorOutput "删除失败: $target (权限不足或文件被占用)" "Error"
             } else {
-                $script:TotalReleasedKb += $sizeKb
+                $freedKb += $sizeKb
                 Write-ColorOutput "已删除: $target" "Success"
                 $didClean = $true
             }
@@ -1346,7 +1346,7 @@ function Clear-DevInLocal {
 
     Write-Host ""
     if ($didClean) {
-        Write-ColorOutput "Devin Local 对话数据清理完成！释放空间: $(Format-KbSize $script:TotalReleasedKb)" "Success"
+        Write-ColorOutput "Devin Local 对话数据清理完成！释放空间: $(Format-KbSize $freedKb)" "Success"
         Write-ColorOutput "登录信息和扩展不受影响，重启 Devin 后对话历史会重新同步" "Info"
     }
     else {

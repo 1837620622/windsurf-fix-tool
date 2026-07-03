@@ -1820,6 +1820,9 @@ clean_devin_local() {
 
     local freed_kb=0
 
+    # 防御：确保 DEVIN_USER_DIR 非空
+    : "${DEVIN_USER_DIR:?}"
+
     # 仅清理三个靶向子目录（保留登录/扩展/缓存/MCP 配置）
     local targets=(
         "$DEVIN_USER_DIR/acp-events"
@@ -1829,7 +1832,8 @@ clean_devin_local() {
 
     for target in "${targets[@]}"; do
         if [ -d "$target" ]; then
-            local size_kb=$(calculate_dir_contents_size_kb "$target")
+            local size_kb
+            size_kb=$(calculate_dir_contents_size_kb "$target")
             print_info "清理: $target ($(format_kb_size "$size_kb"))"
             rm -rf "${target:?}"
             print_success "已删除: $target"
